@@ -776,7 +776,7 @@ function openSheet(row) {
   $('#sheetFields').innerHTML = t.fields.map(([k, l, type]) => type === 'check'
     ? `<label class="chk"><input type="checkbox" name="${k}"><span>${l}</span></label>`
     : type === 'image'
-    ? `<div class="field"><span>${l}</span><label class="img-pick"><input type="file" accept="image/*" hidden><img class="img-prev" alt="" hidden><span class="img-cta">📷 Выбрать фото</span></label></div>`
+    ? `<div class="field"><span>${l}</span><div class="img-pick"><img class="img-prev" alt="" hidden><div class="img-side"><span class="img-cta">Фото не выбрано</span><div class="img-btns"><label class="chip">🖼 Галерея<input type="file" accept="image/*" hidden></label><label class="chip">📁 Файлы<input type="file" hidden></label></div></div></div></div>`
     : type === 'select'
     ? `<label class="field"><span>${l}</span><select name="${k}">${SELECTS[k].map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select></label>`
     : type === 'color'
@@ -822,17 +822,22 @@ function initPalette(input, current) {
 let pendingImg = null;
 function initImagePick(row) {
   pendingImg = null;
-  const pick = $('.img-pick', sheet), inp = $('input', pick), prev = $('.img-prev', pick), cta = $('.img-cta', pick);
-  if (row && row.preview) { prev.src = row.preview; prev.hidden = false; cta.textContent = '📷 Заменить фото'; }
-  inp.onchange = async () => {
-    const f = inp.files[0]; if (!f) return;
+  const pick = $('.img-pick', sheet), prev = $('.img-prev', pick), cta = $('.img-cta', pick);
+  if (row && row.preview) { prev.src = row.preview; prev.hidden = false; cta.textContent = 'Текущее фото'; }
+  const isImg = f => /^image\//.test(f.type) || /\.(jpe?g|png|webp|gif|bmp|avif|heic|heif)$/i.test(f.name);
+  $$('input[type="file"]', pick).forEach(inp => inp.onchange = async () => {
+    const f = inp.files[0]; inp.value = ''; if (!f) return;
+    if (!isImg(f)) { toast('Это не картинка'); replay(pick, 'shake'); return; }
     cta.textContent = '⏳ Обрабатываю…';
     try {
       pendingImg = await processImage(f);
-      prev.src = pendingImg.preview; prev.hidden = false; cta.textContent = '📷 Заменить фото';
+      prev.src = pendingImg.preview; prev.hidden = false; cta.textContent = '✓ ' + f.name;
       replay(prev, 'pop-in'); buzz();
-    } catch (e) { console.error(e); cta.textContent = '📷 Выбрать фото'; toast('Не получилось открыть фото'); }
-  };
+    } catch (e) {
+      console.error(e); cta.textContent = 'Фото не выбрано';
+      toast(/heic|heif/i.test(f.name + f.type) ? 'HEIC не открывается, сохрани фото как JPG' : 'Не получилось открыть фото');
+    }
+  });
 }
 // сжимаем на телефоне: полное фото ~1080px, превью для пульта и маленький размытый «тизер»
 async function processImage(file) {

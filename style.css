@@ -399,9 +399,12 @@ dialog.sheet[open] { animation: slideup .45s var(--ease); }
   width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.22);
   background: rgba(255,255,255,.08); color: #fff; font: 600 16px Manrope, sans-serif; outline: none; color-scheme: dark;
 }
-.img-pick { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 16px; border: 1px dashed rgba(255,255,255,.35); cursor: pointer; }
+.img-pick { display: flex; align-items: center; gap: 14px; padding: 12px; border-radius: 16px; border: 1px dashed rgba(255,255,255,.35); }
+.img-side { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 10px; }
+.img-btns { display: flex; flex-wrap: wrap; gap: 8px; }
+.img-btns .chip { cursor: pointer; }
 .img-prev { width: 84px; height: 84px; border-radius: 12px; object-fit: cover; }
-.img-cta { font-weight: 800; }
+.img-cta { font-weight: 700; font-size: .85rem; color: #C7B4F0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .pop-in { animation: pop .5s var(--spring); }
 @keyframes pop { from { transform: scale(.5); opacity: 0; } }
 
