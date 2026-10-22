@@ -99,7 +99,7 @@ h2 { font: 800 clamp(2rem, 9.5vw, 2.8rem)/1.05 Unbounded, sans-serif; letter-spa
 .kicker { font: 700 1.7rem/1.1 Caveat, cursive; color: var(--fg2); }
 .days-wrap { margin-top: 6px; }
 .days {
-  display: inline-block; font: 800 clamp(6rem, 38vw, 10rem)/.95 Unbounded, sans-serif; letter-spacing: -.06em;
+  display: inline-block; font: 800 clamp(4.5rem, 29vw, 9rem)/1.05 Unbounded, sans-serif; letter-spacing: -.06em;
   font-variant-numeric: tabular-nums;
   background: linear-gradient(110deg, #FFD86B, #FF8FC1 30%, #B28CFF 55%, #FF8FC1 75%, #FFD86B);
   background-size: 200% auto; -webkit-background-clip: text; background-clip: text; color: transparent;
@@ -108,9 +108,9 @@ h2 { font: 800 clamp(2rem, 9.5vw, 2.8rem)/1.05 Unbounded, sans-serif; letter-spa
 @keyframes shine { to { background-position: -200% center; } }
 .days-label { font: 600 1.05rem Unbounded, sans-serif; margin-top: 4px; }
 .clock { display: flex; align-items: center; font: 800 2.1rem/1 Unbounded, sans-serif; margin-top: 22px; }
-.roll { display: inline-block; height: 1em; width: .78em; overflow: hidden; text-align: center; }
+.roll { display: inline-block; height: 1.25em; width: .8em; overflow: hidden; text-align: center; }
 .col { display: block; transition: transform .7s var(--spring); }
-.col span { display: block; height: 1em; }
+.col span { display: block; height: 1.25em; line-height: 1.25em; }
 .clock b { width: .45em; text-align: center; opacity: .45; animation: blink 1s steps(1) infinite; }
 @keyframes blink { 50% { opacity: .1; } }
 
@@ -331,6 +331,64 @@ dialog.sheet[open] { animation: slideup .45s var(--ease); }
 .sheet .btn:disabled { opacity: .6; }
 .del { color: #FF7A9C; font-weight: 800; padding: 12px 4px; border-radius: 999px; transition: .2s; }
 .del.arm { color: #fff; background: #E0234F; padding: 12px 18px; }
+
+/* ---------- планы: её предложения ---------- */
+.plan .tag { display: block; font-size: .78rem; font-weight: 700; opacity: .85; margin-top: 2px; }
+.plan.pending { border-style: dashed; background: rgba(255,255,255,.12); }
+.suggest { display: flex; gap: 8px; margin-top: 14px; }
+.suggest input {
+  flex: 1; min-width: 0; padding: 14px 16px; border-radius: 16px; border: 1px solid rgba(255,255,255,.5);
+  background: rgba(255,255,255,.22); color: #fff; font: 600 16px Manrope, sans-serif; outline: none;
+}
+.suggest input::placeholder { color: rgba(255,255,255,.8); }
+.sug-btn { flex: none; width: 52px; border-radius: 16px; background: #fff; color: var(--berry); font-size: 1.6rem; font-weight: 800; }
+.sug-btn:active { transform: scale(.92); }
+.tabs .badge { display: inline-grid; place-items: center; min-width: 20px; height: 20px; margin-left: 6px; padding: 0 6px;
+  border-radius: 999px; background: var(--berry); color: #fff; font-size: .75rem; }
+
+/* ---------- палитра конвертов ---------- */
+.pal-row { display: flex; gap: 16px; align-items: center; }
+.env-mini { width: 110px; flex: none; }
+.swatches { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; flex: 1; }
+.swatches button { aspect-ratio: 1; border-radius: 12px; border: 2px solid transparent; transition: transform .2s var(--spring); }
+.swatches button[aria-pressed="true"] { border-color: #fff; transform: scale(1.1); }
+.pal-actions { display: flex; gap: 8px; margin-top: 12px; }
+.chip { position: relative; display: inline-flex; align-items: center; gap: 6px; padding: 10px 14px; border-radius: 999px;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.22); font-weight: 800; font-size: .88rem; overflow: hidden; }
+.chip input[type="color"] { position: absolute; inset: 0; opacity: 0; width: 100%; height: 100%; }
+
+/* ---------- игры ---------- */
+.game.ready { background: linear-gradient(135deg, #FF3D8B, #FF9E7A); border-color: transparent; box-shadow: 0 16px 30px -14px rgba(255,61,139,.8); }
+.game.ready small { color: rgba(255,255,255,.9); }
+.layer {
+  position: fixed; inset: 0; z-index: 35; display: flex; flex-direction: column; color: #fff;
+  background: radial-gradient(80% 50% at 20% 0%, #5B1E7A 0%, transparent 70%), radial-gradient(70% 50% at 100% 100%, #7A1E4F 0%, transparent 70%), #1A0826;
+  padding: calc(env(safe-area-inset-top, 0px) + 14px) 16px calc(env(safe-area-inset-bottom, 0px) + 16px);
+  animation: layer-in .5s var(--ease);
+}
+@keyframes layer-in { from { opacity: 0; transform: scale(1.06); } }
+.layer-top { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-bottom: 12px; }
+.layer-top h3 { font: 800 1.25rem Unbounded, sans-serif; }
+.layer-top .x { position: static; flex: none; }
+.layer-body { flex: 1; min-height: 0; display: flex; flex-direction: column; gap: 12px; max-width: 520px; width: 100%; margin: 0 auto; }
+
+/* рисовалка */
+.board { position: relative; flex: 1; min-height: 0; border-radius: 22px; overflow: hidden; background: #FFFDF6;
+  box-shadow: 0 24px 50px -20px rgba(0,0,0,.7); }
+.board canvas { position: absolute; inset: 0; width: 100%; height: 100%; touch-action: none; }
+.board-status { position: absolute; left: 12px; top: 12px; padding: 6px 12px; border-radius: 999px; background: rgba(58,18,64,.08);
+  color: var(--ink); font-size: .8rem; font-weight: 800; pointer-events: none; transition: .3s; }
+.board-status.live { background: var(--berry); color: #fff; }
+.tools { display: flex; align-items: center; gap: 8px; overflow-x: auto; scrollbar-width: none; padding: 2px; }
+.tools::-webkit-scrollbar { display: none; }
+.dot { flex: none; width: 34px; height: 34px; border-radius: 50%; background: var(--c); border: 3px solid rgba(255,255,255,.25); transition: transform .2s var(--spring); }
+.dot[aria-pressed="true"] { border-color: #fff; transform: scale(1.15); }
+.size { flex: none; width: 38px; height: 38px; border-radius: 50%; display: grid; place-items: center; background: rgba(255,255,255,.1); }
+.size i { display: block; border-radius: 50%; background: #fff; }
+.size[aria-pressed="true"] { background: rgba(255,255,255,.35); }
+.tools .sep { flex: none; width: 1px; height: 26px; background: rgba(255,255,255,.2); }
+.tools .chip { flex: none; }
+.chip.arm { background: #E0234F; border-color: #E0234F; }
 
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }

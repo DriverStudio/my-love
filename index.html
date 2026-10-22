@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;700;800&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body>
 <canvas id="fx"></canvas>
@@ -112,6 +112,10 @@
       <h2 data-a>Когда вернусь</h2>
       <p class="sub" data-a id="plansSub">&nbsp;</p>
       <ul class="plans" id="plans"></ul>
+      <div class="suggest" id="suggest" data-a>
+        <input id="sugIn" maxlength="200" placeholder="Предложи, что сделаем вместе">
+        <button class="sug-btn" id="sugBtn" aria-label="Предложить">＋</button>
+      </div>
     </div>
   </section>
 
@@ -133,8 +137,9 @@
     <div class="content">
       <h2 data-a>Игры</h2>
       <p class="sub" data-a>Уже собираю для тебя</p>
-      <button class="game" data-a><i>🃏</i><span><b>Мемори</b><small>Найди пары наших фото</small></span></button>
+      <button class="game ready" data-a data-game="draw"><i>🎨</i><span><b>Рисуем вдвоём</b><small>Один лист на двоих, видно обоим</small></span></button>
       <button class="game" data-a><i>🧩</i><span><b>Пазл</b><small>Собери нас по кусочкам</small></span></button>
+      <button class="game" data-a><i>🃏</i><span><b>Мемори</b><small>Найди пары наших фото</small></span></button>
       <button class="game" data-a><i>🪖</i><span><b>Солдатик</b><small>Позаботься обо мне до дембеля</small></span></button>
     </div>
   </section>
@@ -183,9 +188,25 @@
   </div>
 </dialog>
 
+<!-- слой для игр -->
+<div class="layer" id="layer" hidden>
+  <div class="layer-top"><h3 id="layerTitle"></h3><button class="x" id="layerX" aria-label="Закрыть">✕</button></div>
+  <div class="layer-body" id="layerBody"></div>
+</div>
+
 <div id="toast" role="status"></div>
 
-<script src="config.js"></script>
-<script src="app.js"></script>
+<script>
+  // показывает ошибки прямо на экране (удобно с телефона)
+  window.onerror = function (m, src, line) {
+    var d = document.createElement('div');
+    d.style.cssText = 'position:fixed;z-index:999;left:8px;right:8px;top:8px;padding:12px;border-radius:12px;background:#C8102E;color:#fff;font:13px/1.4 monospace;word-break:break-word';
+    d.textContent = 'Ошибка: ' + m + ' (' + String(src || '').split('/').pop() + ':' + line + ')';
+    document.body.appendChild(d);
+  };
+</script>
+<script src="config.js?v=5"></script>
+<script>if (!window.CONFIG) window.onerror('config.js не загрузился или в нём ошибка (запятая, кавычка)', 'config.js', 0);</script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

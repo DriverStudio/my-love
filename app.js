@@ -152,7 +152,7 @@ $('#app').addEventListener('touchend', e => {
   function enter(btn, chars) {
     const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
     fx.burst(x, y, chars, 60, 1.4); buzz(30);
-    if (isAdmin) { $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 8); initAdmin(); }
+    if (isAdmin) { $('#suggest').hidden = true; $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 8); initAdmin(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
     go(0, x, y);
     setTimeout(() => $('#nav').classList.add('on'), 700);
@@ -197,7 +197,7 @@ let daysLive = false;
 function tick() {
   const ms = Math.max(0, END - Date.now()), d = Math.floor(ms / DAY), s = Math.floor(ms / 1000) % 86400;
   const str = pad(Math.floor(s / 3600)) + pad(Math.floor(s / 60) % 60) + pad(s % 60);
-  [...str].forEach((ch, k) => clockCols[k].style.transform = `translateY(-${ch}em)`);
+  [...str].forEach((ch, k) => clockCols[k].style.transform = `translateY(-${ch * 1.25}em)`);
   if (daysLive) $('#days').textContent = d;
   $('#daysLabel').textContent = plural(d, DAYS) + ' до дембеля';
 }
@@ -246,20 +246,54 @@ function typeText(el, text) {
 }
 async function loadNote() {
   try {
-    [note] = await db('notes?select=text,created_at&order=created_at.desc&limit=1');
-    $('#noteDate').textContent = note ? new Date(note.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : ' ';
+    [note] = await db('notes?select=text,show_on&order=show_on.desc,created_at.desc&limit=1');
+    $('#noteDate').textContent = note ? new Date(note.show_on + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) : ' ';
     if (!note) $('#noteText').textContent = 'Скоро здесь будет записка';
   } catch (e) { console.error(e); fail($('#noteText')); }
 }
 onEnter.note = () => { if (note && !typed) { typed = true; setTimeout(() => typeText($('#noteText'), note.text), 700); } };
 $('#noteCard').onclick = e => { replay($('#noteCard'), 'jelly'); fx.burst(e.clientX, e.clientY, ['💖', '💗', '✨'], 18); buzz(); };
 
+/* ================= цвета конвертов ================= */
+function hexToHsl(hex) {
+  const n = parseInt(hex.slice(1), 16), r = (n >> 16) / 255, g = (n >> 8 & 255) / 255, b = (n & 255) / 255;
+  const mx = Math.max(r, g, b), mn = Math.min(r, g, b), l = (mx + mn) / 2, d = mx - mn;
+  let h = 0, s = 0;
+  if (d) {
+    s = d / (1 - Math.abs(2 * l - 1));
+    h = mx === r ? ((g - b) / d) % 6 : mx === g ? (b - r) / d + 2 : (r - g) / d + 4;
+    h = (h * 60 + 360) % 360;
+  }
+  return [h, s * 100, l * 100];
+}
+const hsl = (h, s, l) => `hsl(${Math.round(h)} ${Math.round(Math.min(100, Math.max(0, s)))}% ${Math.round(Math.min(95, Math.max(8, l)))}%)`;
+function hslToHex(h, s, l) {
+  s /= 100; l /= 100;
+  const k = n => (n + h / 30) % 12, a = s * Math.min(l, 1 - l);
+  const f = n => Math.round(255 * (l - a * Math.max(-1, Math.min(k(n) - 3, 9 - k(n), 1)))).toString(16).padStart(2, '0');
+  return '#' + f(0) + f(8) + f(4);
+}
+function paintEnv(el, hex) {
+  if (!hex || !/^#[0-9a-f]{6}$/i.test(hex)) return;
+  const [h, s, l] = hexToHsl(hex);
+  el.style.setProperty('--e1', hsl(h, s, l));
+  el.style.setProperty('--e2', hsl(h, s + 6, l - 12));
+  el.style.setProperty('--e3', hsl(h, s - 6, l + 12));
+}
+// палитра: случайный оттенок + гармоничная схема
+function genPalette() {
+  const base = Math.random() * 360;
+  const schemes = [[0, 25, 50, -25, -50, 180], [0, 120, 240, 30, 150, 270], [0, 180, 20, 200, -20, 160], [0, 15, 30, 45, 60, 75]];
+  const sc = schemes[Math.floor(Math.random() * schemes.length)];
+  return sc.map((d, i) => hslToHex((base + d + 360) % 360, 70 + Math.random() * 20, 62 + (i % 3) * 6));
+}
+
 /* ================= 3. письма ================= */
 const dlg = $('#dlg'); let openedEnv = null;
 async function loadLetters() {
   const box = $('#letters');
   try {
-    const [all, opened] = await Promise.all([db('letters_locked?select=id,title,open_at&order=open_at'), db('letters?select=id,body')]);
+    const [all, opened] = await Promise.all([db('letters_locked?select=id,title,open_at,color&order=open_at'), db('letters?select=id,body')]);
     const body = Object.fromEntries(opened.map(l => [l.id, l.body]));
     if (!all.length) { box.innerHTML = '<p class="err">Писем пока нет</p>'; return; }
     box.innerHTML = '';
@@ -268,6 +302,7 @@ async function loadLetters() {
       const left = Math.max(1, Math.ceil((openDate - Date.now()) / DAY));
       const b = document.createElement('button');
       b.className = `env c${n % 4}` + (isOpen ? '' : ' locked'); b.dataset.a = '';
+      paintEnv(b, l.color);
       b.innerHTML = `<div class="env-box"><div class="env-back"></div><div class="env-paper"></div><div class="env-front"></div><div class="env-flap"></div><div class="env-seal">${isOpen ? '❤' : '🔒'}</div></div><span class="env-title"></span><span class="env-sub"></span>`;
       $('.env-title', b).textContent = l.title;
       $('.env-sub', b).textContent = isOpen ? 'Можно открыть' : `Через ${left} ${plural(left, DAYS)}`;
@@ -310,20 +345,21 @@ $('#jar').onclick = () => {
 /* ================= 5. планы ================= */
 let plans = [];
 function plansSub() {
-  const done = plans.filter(p => p.done).length, liked = plans.filter(p => p.liked).length;
-  $('#plansSub').textContent = `Сделали ${done} из ${plans.length}, твоих сердечек ${liked}`;
+  const liked = plans.filter(p => p.liked).length;
+  const ok = plans.filter(p => p.approved);
+  $('#plansSub').textContent = `Сделали ${ok.filter(p => p.done).length} из ${ok.length}, твоих сердечек ${liked}`;
 }
 async function loadPlans() {
   const ul = $('#plans');
   try {
-    plans = await db('plans?select=id,text,liked,done&order=id');
+    plans = await db('plans?select=id,text,liked,done,approved,by_her&order=id');
     if (!plans.length) { ul.innerHTML = '<li class="empty">Список пока пуст</li>'; return; }
     ul.innerHTML = '';
     for (const p of plans) {
       const li = document.createElement('li');
-      li.className = 'plan' + (p.done ? ' done' : ''); li.dataset.a = '';
-      li.innerHTML = `<span class="check">${p.done ? '✓' : ''}</span><span class="t"></span><button class="heart" aria-label="Хочу">❤️</button>`;
-      $('.t', li).textContent = p.text;
+      li.className = 'plan' + (p.done ? ' done' : '') + (p.approved ? '' : ' pending'); li.dataset.a = '';
+      li.innerHTML = `<span class="check">${p.done ? '✓' : p.approved ? '' : '⏳'}</span><span class="t"><span class="tx"></span>${p.approved ? (p.by_her ? '<span class="tag">твоя идея 💡</span>' : '') : '<span class="tag">ждёт его «да»</span>'}</span><button class="heart" aria-label="Хочу">❤️</button>`;
+      $('.tx', li).textContent = p.text;
       const h = $('.heart', li);
       const set = v => { p.liked = v; h.setAttribute('aria-pressed', v); plansSub(); };
       set(p.liked);
@@ -337,8 +373,23 @@ async function loadPlans() {
       ul.append(li);
     }
     stagger($('.s-plans'));
+    if (isAdmin) renderTabs();
   } catch (e) { console.error(e); fail(ul); }
 }
+
+async function suggest() {
+  const inp = $('#sugIn'), t = inp.value.trim();
+  if (!t) { replay(inp, 'shake'); return; }
+  $('#sugBtn').disabled = true;
+  try {
+    await rpc('suggest_plan', { t });
+    inp.value = ''; fx.at($('#sugBtn'), ['💡', '💖', '✨'], 22); buzz(20);
+    toast('Отправила ему на одобрение 💌'); await loadPlans();
+  } catch (e) { console.error(e); toast('Не отправилось, попробуй ещё раз'); }
+  finally { $('#sugBtn').disabled = false; }
+}
+$('#sugBtn').onclick = suggest;
+$('#sugIn').onkeydown = e => { if (e.key === 'Enter') suggest(); };
 
 /* ================= 6. настроение ================= */
 const MOODS = { miss: ['🥺', 'Скучаю'], hold: ['💪', 'Держусь'], wait: ['💌', 'Жду'], happy: ['☀️', 'Хороший день'] };
@@ -368,22 +419,144 @@ async function loadMood() {
 }
 
 /* ================= 7. игры ================= */
-$$('.game').forEach(g => g.onclick = () => { replay($('i', g), 'wiggle'); fx.at(g, ['✨', '🎮'], 12); toast('Скоро открою 😉'); });
+const GAMES = {};
+$$('.game').forEach(g => g.onclick = () => {
+  const game = GAMES[g.dataset.game];
+  if (!game) { replay($('i', g), 'wiggle'); fx.at(g, ['✨', '🎮'], 12); toast('Скоро открою 😉'); return; }
+  fx.at(g, ['✨', '🎨', '💖'], 16); buzz(15); openLayer(game);
+});
+let layerGame = null;
+function openLayer(game) {
+  layerGame = game; $('#layerTitle').textContent = game.title;
+  $('#layerBody').innerHTML = ''; $('#layer').hidden = false; $('#nav').style.visibility = 'hidden';
+  game.open($('#layerBody'));
+}
+function closeLayer() {
+  layerGame && layerGame.close && layerGame.close(); layerGame = null;
+  $('#layer').hidden = true; $('#nav').style.visibility = '';
+}
+$('#layerX').onclick = closeLayer;
+
+/* ---------- 🎨 рисуем вдвоём ---------- */
+GAMES.draw = (() => {
+  const COLORS = ['#3A1240', '#FF3D8B', '#FF9E7A', '#FFC93C', '#3CCB8E', '#3D8BFF', '#9B6BFF', '#FFFDF6'];
+  const SIZES = [.006, .014, .03];
+  let cv, g, W, H, strokes = [], seen = new Set(), lastId = 0, timer = 0, color = COLORS[1], size = SIZES[1], cur = null, ro;
+  const me = () => isAdmin ? 'he' : 'she';
+
+  function drawStroke(st) {
+    const p = st.points; if (!p || !p.length) return;
+    g.strokeStyle = st.color; g.lineWidth = Math.max(1.5, st.width * W); g.lineCap = g.lineJoin = 'round';
+    g.beginPath(); g.moveTo(p[0][0] * W, p[0][1] * H);
+    if (p.length === 1) g.lineTo(p[0][0] * W + .1, p[0][1] * H);
+    for (let i = 1; i < p.length - 1; i++) {
+      const mx = (p[i][0] + p[i + 1][0]) / 2 * W, my = (p[i][1] + p[i + 1][1]) / 2 * H;
+      g.quadraticCurveTo(p[i][0] * W, p[i][1] * H, mx, my);
+    }
+    if (p.length > 1) g.lineTo(p[p.length - 1][0] * W, p[p.length - 1][1] * H);
+    g.stroke();
+  }
+  function redraw() { g.clearRect(0, 0, W, H); strokes.forEach(drawStroke); cur && drawStroke(cur); }
+  function resize() {
+    const r = cv.getBoundingClientRect(), dpr = Math.min(2, devicePixelRatio || 1);
+    W = r.width; H = r.height; cv.width = W * dpr; cv.height = H * dpr; g.setTransform(dpr, 0, 0, dpr, 0, 0); redraw();
+  }
+  function status(text, live) { const s = $('.board-status'); if (!s) return; s.textContent = text; s.classList.toggle('live', !!live); }
+
+  function take(rows, initial) {
+    let other = false;
+    for (const r of rows) {
+      lastId = Math.max(lastId, r.id);
+      if (seen.has(r.id)) continue; seen.add(r.id);
+      if (r.kind === 'clear') { strokes = []; if (!initial) toast(r.who === me() ? 'Лист очищен' : (r.who === 'he' ? 'Он' : 'Она') + ' взял(а) новый лист'); continue; }
+      strokes.push(r); if (r.who !== me()) other = true;
+    }
+    redraw();
+    if (other && !initial) { status(isAdmin ? 'Она рисует ✏️' : 'Он рисует ✏️', true); clearTimeout(status.t); status.t = setTimeout(() => status('Рисуем вдвоём'), 3000); }
+  }
+  async function load() {
+    const [clr] = await db('strokes?select=id&kind=eq.clear&order=id.desc&limit=1');
+    const from = clr ? clr.id : 0; lastId = from;
+    take(await db(`strokes?select=*&id=gt.${from}&kind=eq.line&order=id`), true);
+  }
+  async function poll() {
+    try { take(await db(`strokes?select=*&id=gt.${lastId}&order=id`)); } catch (e) { console.error(e); }
+    timer = setTimeout(poll, document.hidden ? 6000 : 2000);
+  }
+  async function send(st) {
+    try {
+      const [row] = await db('strokes', { method: 'POST', headers: { Prefer: 'return=representation' }, body: JSON.stringify(st) });
+      if (row) { seen.add(row.id); lastId = Math.max(lastId, row.id); }
+    } catch (e) { console.error(e); toast('Линия не сохранилась, нет сети'); }
+  }
+
+  const pt = e => { const r = cv.getBoundingClientRect(); return [+((e.clientX - r.left) / W).toFixed(4), +((e.clientY - r.top) / H).toFixed(4)]; };
+  function down(e) { cv.setPointerCapture(e.pointerId); cur = { who: me(), kind: 'line', color, width: size, points: [pt(e)] }; redraw(); }
+  function move(e) {
+    if (!cur) return;
+    const p = pt(e), q = cur.points[cur.points.length - 1];
+    if (Math.hypot(p[0] - q[0], p[1] - q[1]) < .004 || cur.points.length > 1400) return;
+    cur.points.push(p); redraw();
+  }
+  function up() { if (!cur) return; const st = cur; cur = null; strokes.push(st); redraw(); send(st); }
+
+  return {
+    title: 'Рисуем вдвоём',
+    open(root) {
+      root.innerHTML = `
+        <div class="board"><canvas></canvas><span class="board-status">Загружаю…</span></div>
+        <div class="tools">
+          ${COLORS.map(c => `<button class="dot" style="--c:${c}" data-c="${c}" aria-label="Цвет"></button>`).join('')}
+          <span class="sep"></span>
+          ${SIZES.map((s, i) => `<button class="size" data-s="${s}" aria-label="Толщина"><i style="width:${6 + i * 6}px;height:${6 + i * 6}px"></i></button>`).join('')}
+          <span class="sep"></span>
+          <button class="chip" id="drawClear">🧻 Новый лист</button>
+        </div>`;
+      cv = $('canvas', root); g = cv.getContext('2d');
+      const mark = () => {
+        $$('.dot', root).forEach(b => b.setAttribute('aria-pressed', b.dataset.c === color));
+        $$('.size', root).forEach(b => b.setAttribute('aria-pressed', +b.dataset.s === size));
+      };
+      $('.tools', root).onclick = e => {
+        const b = e.target.closest('button'); if (!b) return;
+        if (b.dataset.c) color = b.dataset.c; else if (b.dataset.s) size = +b.dataset.s; else return;
+        mark(); buzz(6);
+      };
+      mark();
+      const clr = $('#drawClear');
+      clr.onclick = async () => {
+        if (!clr.classList.contains('arm')) {
+          clr.classList.add('arm'); clr.textContent = 'Точно стереть?';
+          clearTimeout(clr.t); clr.t = setTimeout(() => { clr.classList.remove('arm'); clr.textContent = '🧻 Новый лист'; }, 3000); return;
+        }
+        clr.classList.remove('arm'); clr.textContent = '🧻 Новый лист';
+        strokes = []; redraw(); await send({ who: me(), kind: 'clear' });
+      };
+      cv.onpointerdown = down; cv.onpointermove = move; cv.onpointerup = cv.onpointercancel = up;
+      ro = new ResizeObserver(resize); ro.observe(cv); resize();
+      strokes = []; seen = new Set();
+      load().then(() => { status('Рисуем вдвоём'); poll(); }).catch(e => { console.error(e); status('Нет связи'); });
+    },
+    close() { clearTimeout(timer); timer = 0; ro && ro.disconnect(); cur = null; },
+  };
+})();
 
 /* ================= 8. пульт ================= */
 const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
 const T = {
-  notes: { name: 'Записки', one: 'записку', order: 'created_at.desc',
-    fields: [['text', 'Текст записки', 'area']],
-    label: r => r.text, meta: r => new Date(r.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) },
+  notes: { name: 'Записки', one: 'записку',
+    fields: [['text', 'Текст записки', 'area'], ['show_on', 'В какой день показать', 'date']],
+    label: r => r.text,
+    meta: r => { const t = dateIn(Date.now()), d = fmtDate(r.show_on); return r.show_on > t ? '⏰ Покажется ' + d : r.show_on === t ? '🟢 Сегодня' : 'Была ' + d; } },
   letters: { name: 'Письма', one: 'письмо', order: 'open_at',
-    fields: [['title', 'Заголовок на конверте', 'text'], ['open_at', 'Когда можно открыть', 'date'], ['body', 'Текст письма', 'area']],
+    fields: [['title', 'Заголовок на конверте', 'text'], ['open_at', 'Когда можно открыть', 'date'], ['color', 'Цвет конверта', 'color'], ['body', 'Текст письма', 'area']],
     label: r => r.title, meta: r => new Date(r.open_at + 'T00:00:00') <= Date.now() ? 'Уже открыто' : 'Откроется ' + fmtDate(r.open_at) },
   reasons: { name: 'Причины', one: 'причину', order: 'id',
     fields: [['text', 'Почему я тебя люблю', 'area']], label: r => r.text, meta: () => '' },
   plans: { name: 'Планы', one: 'план', order: 'id',
-    fields: [['text', 'Что сделаем', 'text'], ['done', 'Уже сделали', 'check']],
-    label: r => r.text, meta: r => [r.done ? '✓ сделали' : '', r.liked ? '❤ она хочет' : ''].filter(Boolean).join(', ') },
+    fields: [['text', 'Что сделаем', 'text'], ['approved', 'Одобрено (она видит без «ждёт»)', 'check'], ['done', 'Уже сделали', 'check']],
+    label: r => (r.approved ? '' : '⏳ ') + r.text,
+    meta: r => [r.approved ? '' : 'Она предложила, ждёт твоего «да»', r.by_her && r.approved ? 'идея от неё' : '', r.done ? '✓ сделали' : '', r.liked ? '❤ она хочет' : ''].filter(Boolean).join(', ') },
 };
 const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans() };
 let admTab = 'notes', admRows = [], editing = null;
@@ -391,7 +564,9 @@ const sheet = $('#sheet');
 
 function initAdmin() { renderTabs(); loadAdm(); }
 function renderTabs() {
-  $('#admTabs').innerHTML = Object.entries(T).map(([k, t]) => `<button data-k="${k}" aria-pressed="${k === admTab}">${t.name}</button>`).join('');
+  const pend = plans.filter(p => !p.approved).length;
+  $('#admTabs').innerHTML = Object.entries(T).map(([k, t]) =>
+    `<button data-k="${k}" aria-pressed="${k === admTab}">${t.name}${k === 'plans' && pend ? `<span class="badge">${pend}</span>` : ''}</button>`).join('');
 }
 $('#admTabs').onclick = e => { const b = e.target.closest('button'); if (!b || b.dataset.k === admTab) return; admTab = b.dataset.k; renderTabs(); loadAdm(); buzz(); };
 async function loadAdm() {
@@ -416,14 +591,43 @@ function openSheet(row) {
   $('#sheetTitle').textContent = row ? 'Изменить ' + t.one : 'Добавить ' + t.one;
   $('#sheetFields').innerHTML = t.fields.map(([k, l, type]) => type === 'check'
     ? `<label class="chk"><input type="checkbox" name="${k}"><span>${l}</span></label>`
+    : type === 'color'
+    ? `<div class="field"><span>${l}</span><div class="pal-row"><div class="env env-mini c0" id="envPrev"><div class="env-box"><div class="env-back"></div><div class="env-paper"></div><div class="env-front"></div><div class="env-flap"></div><div class="env-seal">❤</div></div></div><div class="swatches" id="swatches"></div></div><div class="pal-actions"><button type="button" class="chip" id="palGen">🎲 Другие цвета</button><label class="chip">🎨 Свой<input type="color" name="${k}"></label></div></div>`
     : `<label class="field"><span>${l}</span>${type === 'area' ? `<textarea name="${k}" rows="${k === 'body' ? 9 : 3}"></textarea>` : `<input name="${k}" type="${type}">`}</label>`).join('');
   t.fields.forEach(([k, , type]) => {
     const el = $(`[name="${k}"]`, sheet);
-    if (type === 'check') el.checked = !!(row && row[k]);
-    else el.value = row ? (row[k] ?? '') : type === 'date' ? dateIn(Date.now()) : '';
+    if (type === 'check') el.checked = row ? !!row[k] : k === 'approved';
+    else if (type === 'color') initPalette(el, row && row[k]);
+    else el.value = row ? (row[k] ?? '') : type === 'date' ? defaultDate(k) : '';
   });
   const del = $('#sheetDel'); del.hidden = !row; del.classList.remove('arm'); del.textContent = 'Удалить';
   sheet.showModal();
+}
+// новая записка по умолчанию встаёт на следующий свободный день
+function defaultDate(k) {
+  const today = dateIn(Date.now());
+  if (admTab !== 'notes' || k !== 'show_on') return today;
+  const last = admRows.map(r => r.show_on).filter(Boolean).sort().pop();
+  if (!last || last < today) return today;
+  const d = new Date(last + 'T12:00:00'); d.setDate(d.getDate() + 1);
+  return d.toLocaleDateString('sv-SE');
+}
+function initPalette(input, current) {
+  const prev = $('#envPrev'), sw = $('#swatches');
+  const pick = hex => {
+    input.value = hex; paintEnv(prev, hex);
+    $$('button', sw).forEach(b => b.setAttribute('aria-pressed', b.dataset.c === hex));
+  };
+  const fill = () => {
+    const pal = genPalette();
+    sw.innerHTML = pal.map(c => `<button type="button" data-c="${c}" style="background:${c}" aria-label="Цвет"></button>`).join('');
+    return pal;
+  };
+  sw.onclick = e => { const b = e.target.closest('button'); if (b) { pick(b.dataset.c); buzz(); } };
+  $('#palGen').onclick = () => { const p = fill(); pick(p[0]); replay(prev, 'wiggle'); buzz(); };
+  input.oninput = () => pick(input.value);
+  const pal = fill();
+  pick(current && /^#[0-9a-f]{6}$/i.test(current) ? current : pal[0]);
 }
 $('#admAdd').onclick = () => openSheet(null);
 $('#sheetX').onclick = () => sheet.close();
