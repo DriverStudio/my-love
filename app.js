@@ -507,20 +507,16 @@ GAMES.puzzle = (() => {
       moves: saved ? saved.moves : 0, secs: saved ? saved.secs : 0, timer: 0 };
     $('.pz-ghost', board).style.backgroundImage = `url(${url})`;
     for (let h = 0; h < n; h++) {
-      const el = document.createElement('div'), c = h % cols, r = Math.floor(h / cols);
-      el.className = 'tile';
+      const el = document.createElement('div'); el.className = 'tile';
       el.style.backgroundImage = `url(${url})`;
-      el.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
-      el.style.backgroundPosition = `${c / (cols - 1) * 100}% ${r / (rows - 1) * 100}%`;
-      const t = { el, home: h, pos: order[h], locked: false };
-      t.locked = t.pos === t.home; if (t.locked) el.classList.add('ok');
+      const t = { el, home: h, pos: order[h], conn: {}, g: null };
       st.tiles.push(t); board.append(el); bind(t);
     }
-    stats(); layout();
+    recompute(); stats(); layout();
     // раздача: кусочки вылетают из центра
     st.tiles.forEach(t => { t.el.style.transition = 'none'; t.el.style.opacity = 0; t.el.style.transform = `translate(${(st.bw - st.tw) / 2}px,${(st.bh - st.th) / 2}px) scale(.2) rotate(${Math.random() * 60 - 30}deg)`; });
     void board.offsetWidth;
-    st.tiles.forEach(t => { t.el.style.transition = ''; t.el.style.transitionDelay = (reduce ? 0 : Math.random() * 450 | 0) + 'ms'; t.el.style.opacity = 1; place(t); });
+    st.tiles.forEach(t => { t.el.style.transition = ''; t.el.style.transitionDelay = (reduce ? 0 : Math.random() * 450 | 0) + 'ms'; t.el.style.opacity = 1; render(t); });
     setTimeout(() => st && st.tiles.forEach(t => t.el.style.transitionDelay = ''), 1000);
     ro = new ResizeObserver(layout); ro.observe($('#pzStage'));
     st.timer = setInterval(() => {
@@ -532,70 +528,126 @@ GAMES.puzzle = (() => {
     peek.oncontextmenu = e => e.preventDefault();
   }
 
+  function stats() { $('#pzTime').textContent = fmtT(st.secs); $('#pzMoves').textContent = `${st.moves} ${plural(st.moves, ['ход', 'хода', 'ходов'])}`; }
+  function save() { if (st && !st.done) store.set(key(st.p.id), { order: st.tiles.map(t => t.pos), moves: st.moves, secs: st.secs }); }
+
+  /* --- геометрия --- */
+  const cr = i => [i % st.cols, Math.floor(i / st.cols)];
   function layout() {
     const stage = $('#pzStage'); if (!stage || !st) return;
     const sw = stage.clientWidth, sh = stage.clientHeight;
     let bw = sw, bh = sw / st.aspect; if (bh > sh) { bh = sh; bw = sh * st.aspect; }
-    const g = st.done ? 0 : st.gap;
+    const g = st.gap;
     Object.assign(st, { bw, bh, g, tw: (bw - g * (st.cols - 1)) / st.cols, th: (bh - g * (st.rows - 1)) / st.rows });
+    st.px = st.tw + g; st.py = st.th + g;
     st.board.style.width = bw + 'px'; st.board.style.height = bh + 'px';
-    st.tiles.forEach(t => { t.el.style.width = st.tw + 'px'; t.el.style.height = st.th + 'px'; if (!t.el.classList.contains('drag')) place(t); });
+    st.tiles.forEach(t => {
+      const [hc, hr] = cr(t.home);
+      t.el.style.backgroundSize = `${bw}px ${bh}px`;
+      t.el.style.backgroundPosition = `${-hc * st.px}px ${-hr * st.py}px`;
+      if (!t.el.classList.contains('drag')) render(t);
+    });
   }
-  const cellXY = i => [(i % st.cols) * (st.tw + st.g), Math.floor(i / st.cols) * (st.th + st.g)];
-  function place(t, dx = 0, dy = 0, sc = 1) { const [x, y] = cellXY(t.pos); t.el.style.transform = `translate(${x + dx}px,${y + dy}px) scale(${sc})`; }
-  function stats() { $('#pzTime').textContent = fmtT(st.secs); $('#pzMoves').textContent = `${st.moves} ${plural(st.moves, ['ход', 'хода', 'ходов'])}`; }
-  function save() { if (st && !st.done) store.set(key(st.p.id), { order: st.tiles.map(t => t.pos), moves: st.moves, secs: st.secs }); }
-  function clearSel() { if (st.sel) { st.sel.el.classList.remove('sel'); st.sel = null; } }
+  // кусок рисуется с «нахлёстом» на щель там, где он склеен с соседом
+  function render(t, dx = 0, dy = 0) {
+    const [c, r] = cr(t.pos), k = t.conn, R = 6;
+    const w = st.tw + (k.r ? st.g + 1 : 0), h = st.th + (k.b ? st.g + 1 : 0); // +1px нахлёст, чтобы не было волосяных швов
+    t.el.style.width = w + 'px'; t.el.style.height = h + 'px';
+    t.el.style.transform = `translate(${c * st.px + dx}px,${r * st.py + dy}px)`;
+    t.el.style.borderRadius = `${k.t || k.l ? 0 : R}px ${k.t || k.r ? 0 : R}px ${k.b || k.r ? 0 : R}px ${k.b || k.l ? 0 : R}px`;
+  }
 
+  /* --- склейка: соседи по картинке, стоящие рядом правильно, образуют группу --- */
+  function recompute() {
+    const T = st.tiles, parent = T.map((_, i) => i);
+    const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
+    T.forEach(t => t.conn = {});
+    for (const t of T) {
+      const [hc, hr] = cr(t.home), [pc, pr] = cr(t.pos);
+      if (hc < st.cols - 1) { const u = T[t.home + 1]; if (pc < st.cols - 1 && u.pos === t.pos + 1) { t.conn.r = u.conn.l = true; parent[find(t.home)] = find(u.home); } }
+      if (hr < st.rows - 1) { const u = T[t.home + st.cols]; if (pr < st.rows - 1 && u.pos === t.pos + st.cols) { t.conn.b = u.conn.t = true; parent[find(t.home)] = find(u.home); } }
+    }
+    const groups = new Map();
+    T.forEach(t => { const r = find(t.home); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(t); });
+    groups.forEach(list => { const g = { list, locked: list[0].pos === list[0].home }; list.forEach(t => t.g = g); });
+    T.forEach(t => t.el.classList.toggle('ok', t.g.locked));
+  }
+  const links = () => st.tiles.reduce((s, t) => s + (t.conn.r ? 1 : 0) + (t.conn.b ? 1 : 0), 0);
+
+  /* --- управление --- */
   function bind(t) {
     const el = t.el; let sx = 0, sy = 0, drag = false, pid = null;
     el.onpointerdown = e => {
       if (st.done) return;
-      if (t.locked) { replay(el, 'nope'); return; }
+      if (t.g.locked) { t.g.list.forEach(m => replay(m.el, 'nope')); return; }
       pid = e.pointerId; el.setPointerCapture(pid); sx = e.clientX; sy = e.clientY; drag = false;
     };
     el.onpointermove = e => {
       if (pid !== e.pointerId) return;
       const dx = e.clientX - sx, dy = e.clientY - sy;
-      if (!drag && Math.hypot(dx, dy) > 7) { drag = true; clearSel(); el.classList.add('drag'); }
-      if (drag) place(t, dx, dy, 1.08);
+      if (!drag && Math.hypot(dx, dy) > 7) { drag = true; clearSel(); t.g.list.forEach(m => m.el.classList.add('drag')); }
+      if (drag) t.g.list.forEach(m => render(m, dx, dy));
     };
     el.onpointerup = e => {
       if (pid !== e.pointerId) return; pid = null;
       if (!drag) return tap(t);
-      el.classList.remove('drag');
+      const list = t.g.list; list.forEach(m => m.el.classList.remove('drag'));
       const r = st.board.getBoundingClientRect();
-      const c = Math.floor((e.clientX - r.left) / (st.tw + st.g)), rr = Math.floor((e.clientY - r.top) / (st.th + st.g));
-      const target = c >= 0 && c < st.cols && rr >= 0 && rr < st.rows ? rr * st.cols + c : -1;
-      const other = st.tiles.find(o => o.pos === target);
-      if (!other || other === t || other.locked) { place(t); return; }
-      swap(t, other);
+      // куда встал схваченный кусок: по его центру
+      const [pc, pr] = cr(t.pos);
+      const cx = pc * st.px + st.tw / 2 + (e.clientX - sx), cy = pr * st.py + st.th / 2 + (e.clientY - sy);
+      const tc = Math.max(0, Math.min(st.cols - 1, Math.floor(cx / st.px))), tr = Math.max(0, Math.min(st.rows - 1, Math.floor(cy / st.py)));
+      if (!move(list, tc - pc, tr - pr)) list.forEach(m => render(m));
     };
-    el.onpointercancel = () => { pid = null; el.classList.remove('drag'); place(t); };
+    el.onpointercancel = () => { pid = null; t.g.list.forEach(m => { m.el.classList.remove('drag'); render(m); }); };
   }
+  function clearSel() { if (st.sel) { st.sel.g.list.forEach(m => m.el.classList.remove('sel')); st.sel = null; } }
   function tap(t) {
-    if (!st.sel) { st.sel = t; t.el.classList.add('sel'); buzz(5); return; }
-    if (st.sel === t) { clearSel(); return; }
-    const a = st.sel; clearSel(); swap(a, t);
+    if (!st.sel) { st.sel = t; t.g.list.forEach(m => m.el.classList.add('sel')); buzz(5); return; }
+    const a = st.sel; clearSel();
+    if (a.g === t.g) return;
+    const [ac, ar] = cr(a.pos), [bc, br] = cr(t.pos);
+    if (!move(a.g.list, bc - ac, br - ar)) { a.g.list.forEach(m => replay(m.el, 'nope')); buzz(30); }
   }
-  function swap(a, b) {
-    [a.pos, b.pos] = [b.pos, a.pos];
-    a.el.style.zIndex = 4; b.el.style.zIndex = 3;
-    place(a); place(b);
-    setTimeout(() => { a.el.style.zIndex = ''; b.el.style.zIndex = ''; }, 380);
-    st.moves++; stats(); buzz(8);
-    let hit = false;
-    for (const t of [a, b]) if (t.pos === t.home) {
-      t.locked = true; t.el.classList.add('ok'); replay(t.el, 'flash'); hit = true;
-      setTimeout(() => fx.at(t.el, ['✨'], 6, .5), 250);
+  // сдвиг группы на (dc, dr); вытесненные куски уезжают на освободившиеся места
+  function move(list, dc, dr) {
+    if (!dc && !dr) return false;
+    const at = []; st.tiles.forEach(x => at[x.pos] = x);
+    const inG = new Set(list), target = new Map(), newCells = new Set();
+    for (const m of list) {
+      const [c, r] = cr(m.pos), nc = c + dc, nr = r + dr;
+      if (nc < 0 || nc >= st.cols || nr < 0 || nr >= st.rows) return false;
+      const cell = nr * st.cols + nc; target.set(m, cell); newCells.add(cell);
     }
-    if (hit) buzz(20);
+    const back = i => { const [c, r] = cr(i); return (r - dr) * st.cols + (c - dc); };
+    const displaced = [];
+    for (const cell of newCells) {
+      const o = at[cell]; if (inG.has(o)) continue;
+      if (o.g.locked) return false; // собранное на месте не трогаем
+      let y = back(cell); while (newCells.has(y)) y = back(y);
+      displaced.push([o, y]);
+    }
+    const before = links(), prevConn = new Map(st.tiles.map(x => [x, { ...x.conn }]));
+    target.forEach((cell, m) => { m.pos = cell; m.el.style.zIndex = 4; });
+    displaced.forEach(([o, y]) => { o.pos = y; o.el.style.zIndex = 3; });
+    recompute(); st.tiles.forEach(x => render(x));
+    setTimeout(() => [...target.keys(), ...displaced.map(d => d[0])].forEach(x => x.el.style.zIndex = ''), 400);
+    st.moves++; stats(); buzz(8);
+    if (links() > before) { // новая склейка
+      const fresh = st.tiles.filter(x => { const p = prevConn.get(x); return (x.conn.r && !p.r) || (x.conn.b && !p.b) || (x.conn.l && !p.l) || (x.conn.t && !p.t); });
+      setTimeout(() => {
+        fresh.forEach(x => replay(x.el, 'flash'));
+        if (fresh[0]) fx.at(fresh[0].el, ['✨'], 8, .5);
+        buzz(20);
+      }, 260);
+    }
     save();
-    if (st.tiles.every(t => t.locked)) setTimeout(win, 350);
+    if (st.tiles.every(x => x.pos === x.home)) setTimeout(win, 380);
+    return true;
   }
   function win() {
     st.done = true; clearInterval(st.timer); store.set(key(st.p.id), null);
-    st.board.classList.add('solved'); layout();
+    st.board.classList.add('solved');
     navigator.vibrate && navigator.vibrate([40, 60, 80]);
     const r = st.board.getBoundingClientRect();
     [0, 1, 2].forEach(i => setTimeout(() => fx.burst(r.left + r.width * (.2 + .3 * i), r.top + r.height * .45, ['💖', '✨', '🎉', '💗'], 36, 1.3), 500 + i * 220));
