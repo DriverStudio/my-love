@@ -472,6 +472,44 @@ dialog.sheet[open] { animation: slideup .45s var(--ease); }
 .pz-win span { font-weight: 700; color: #9A4F86; font-size: .9rem; }
 .pz-win p { margin-top: 8px; font: 700 1.5rem/1.3 Caveat, cursive; }
 
+/* ---------- её вход: вжух ---------- */
+.intro.vzhuh > :not(.intro-heart) { opacity: 0 !important; transform: scale(.7); transition: opacity .3s, transform .4s; animation: none; }
+.warp {
+  position: fixed; inset: 0; z-index: 45; overflow: hidden; opacity: 0; transition: opacity .5s;
+  background: radial-gradient(60% 50% at 50% 50%, #5A1A6E 0%, #24082F 55%, #0E0418 100%);
+}
+.warp.on { opacity: 1; }
+.warp.out { opacity: 0; transition: opacity .8s .1s; pointer-events: none; }
+.warp canvas { position: absolute; inset: 0; width: 100%; height: 100%; }
+.warp-space { position: absolute; inset: 0; perspective: 800px; pointer-events: none; }
+.wcard { position: absolute; left: 50%; top: 50%; will-change: transform, opacity; opacity: 0; }
+.wcard.photo { width: 150px; margin: -95px 0 0 -75px; padding: 8px 8px 30px; background: #fff; border-radius: 4px;
+  box-shadow: 0 24px 50px rgba(0,0,0,.55), 0 0 40px rgba(255,143,193,.35); }
+.wcard.photo img { display: block; width: 100%; aspect-ratio: 1; object-fit: cover; border-radius: 2px; }
+.wcard.photo span { position: absolute; left: 0; right: 0; bottom: 4px; text-align: center; color: var(--ink); font: 700 1.05rem Caveat, cursive;
+  white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding: 0 8px; }
+.wcard.text { width: 210px; margin: -50px 0 0 -105px; padding: 16px 18px; border-radius: 18px; text-align: center; color: var(--ink);
+  background: linear-gradient(135deg, #FFE0EE, #FFF6DC); font: 700 1.45rem/1.25 Caveat, cursive; box-shadow: 0 0 50px rgba(255,61,139,.45); }
+.wcard.emo { font-size: 70px; margin: -42px 0 0 -42px; filter: drop-shadow(0 0 20px rgba(255,143,193,.8)); }
+.warp-flash { position: absolute; inset: 0; background: #fff; opacity: 0; pointer-events: none; }
+.warp.flash .warp-flash { animation: wflash .9s ease-out forwards; }
+@keyframes wflash { 0% { opacity: 0; } 25% { opacity: 1; } 100% { opacity: 0; } }
+.warp-final { position: absolute; inset: 0; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+  text-align: center; padding: 24px; pointer-events: none; }
+.warp-final p { opacity: 0; }
+.warp.final .warp-final p { animation: wf-in .9s var(--spring) forwards; }
+.warp.final .wf-line { animation-delay: .25s !important; }
+.warp.final .wf-days { animation-delay: .55s !important; }
+@keyframes wf-in { from { opacity: 0; transform: translateY(30px) scale(.7); filter: blur(8px); } to { opacity: 1; transform: none; filter: none; } }
+.wf-name { font: 800 clamp(2.2rem, 11vw, 3.6rem)/1.05 Unbounded, sans-serif; letter-spacing: -.03em;
+  background: linear-gradient(110deg, #FFD86B, #FF8FC1 40%, #C9B2FF 70%, #FFD86B); background-size: 200% auto;
+  -webkit-background-clip: text; background-clip: text; color: transparent; padding: .08em .1em; }
+.wf-line { font: 700 2rem Caveat, cursive; color: #FFE0EE; }
+.wf-days { font-weight: 700; color: #E9C9F2; }
+.wf-days b { font: 800 1.6rem Unbounded, sans-serif; color: #fff; }
+.warp-skip { position: absolute; right: 16px; bottom: calc(env(safe-area-inset-bottom, 0px) + 18px); padding: 10px 16px; border-radius: 999px;
+  background: rgba(255,255,255,.12); color: rgba(255,255,255,.8); font-weight: 700; font-size: .85rem; -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px); }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   [data-a], .intro-title .ch, .intro-sub, .who, .reason-card { opacity: 1 !important; transform: none !important; }

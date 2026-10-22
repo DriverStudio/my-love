@@ -151,8 +151,8 @@ $('#app').addEventListener('touchend', e => {
     for (const ch of word) { const s = document.createElement('span'); s.className = 'ch'; s.textContent = ch; s.style.setProperty('--i', i++); w.append(s); }
     el.append(w, ' ');
   });
-  function enter(btn, chars) {
-    const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+  function enter(btn, chars, pt) {
+    const r = btn.getBoundingClientRect(), x = pt ? pt[0] : r.left + r.width / 2, y = pt ? pt[1] : r.top + r.height / 2;
     fx.burst(x, y, chars, 60, 1.4); buzz(30);
     if (isAdmin) { $('#suggest').hidden = true; $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 8); initAdmin(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
@@ -166,7 +166,7 @@ $('#app').addEventListener('touchend', e => {
     btn.disabled = true;
     try {
       quizQ = await rpc('get_question', {});
-      if (!quizQ) return enter(btn, ['❤️', '💖', '💗', '✨']); // вопросов нет — пускаем сразу
+      if (!quizQ) return herIn(btn); // вопросов нет — пускаем сразу
       wrong = 0;
       $('#quizQ').textContent = quizQ.question;
       const a = $('#quizA'); a.value = '';
@@ -175,7 +175,7 @@ $('#app').addEventListener('touchend', e => {
       $('#who').hidden = true; $('#login').hidden = true; $('#quiz').hidden = false; $('#intro').classList.add('asking');
       replay($('#quiz'), 'pop-in');
       if (a.type === 'text') setTimeout(() => a.focus(), 300);
-    } catch (e) { console.error(e); enter(btn, ['❤️', '💖', '💗', '✨']); } // нет связи — не мучаем
+    } catch (e) { console.error(e); herIn(btn); } // нет связи — не мучаем
     finally { btn.disabled = false; }
   }
   async function answer() {
@@ -184,7 +184,7 @@ $('#app').addEventListener('touchend', e => {
     btn.disabled = true;
     try {
       const r = await rpc('check_answer', { qid: quizQ.id, a: a.value });
-      if (r && r.ok) { toast('Это точно ты 💗'); $('#quiz').hidden = true; return enter(btn, ['💗', '💖', '✨', '🔓']); }
+      if (r && r.ok) { $('#quiz').hidden = true; return herIn(btn); }
       wrong++; replay(a, 'shake'); buzz(60);
       toast(NOPE[Math.floor(Math.random() * NOPE.length)]);
       if (r && r.hint) { $('#quizHint').textContent = 'Подсказка: ' + r.hint; $('#quizHint').hidden = false; }
@@ -192,7 +192,12 @@ $('#app').addEventListener('touchend', e => {
     } catch (e) { console.error(e); toast('Нет связи, попробуй ещё раз'); }
     finally { btn.disabled = false; }
   }
-  $('#asHer').onclick = e => ask(e.currentTarget);
+  $('#asHer').onclick = e => { preloadMemories(); ask(e.currentTarget); };
+  // её вход: вжух → полёт сквозь воспоминания → «привет»
+  function herIn(btn) {
+    if (reduce) return enter(btn, ['💗', '💖', '✨']);
+    entrance(() => enter(btn, ['💗', '💖', '✨', '💫'], [innerWidth / 2, innerHeight / 2]));
+  }
   $('#quizBtn').onclick = answer;
   $('#quizA').onkeydown = e => { if (e.key === 'Enter') answer(); };
   $('#quizOther').onclick = () => ask($('#quizOther'));
@@ -855,11 +860,14 @@ T.questions = { name: 'Вопросы', one: 'вопрос',
            ['hint', 'Подсказка после ошибки (необязательно)', 'text', 1]],
   label: r => r.question,
   meta: r => `${r.kind === 'date' ? '📅 дата' : '✍️ словами'}, спрашивал ${r.asked_count || 0} ${plural(r.asked_count || 0, ['раз', 'раза', 'раз'])}` + (r.wrong_streak ? `, ошибок подряд: ${r.wrong_streak}` : '') };
+T.memories = { name: 'Воспоминания', one: 'воспоминание',
+  fields: [['image', 'Фото (летит при её входе)', 'image'], ['caption', 'Подпись (необязательно)', 'text', 1]],
+  label: r => r.caption || 'Без подписи', meta: () => 'летает на входе' };
 const SELECTS = {
   cols: Object.entries(DIFF).map(([v, n]) => [v, `${n}, ${v}×${v}`]),
   kind: [['text', '✍️ Словами'], ['date', '📅 Выбирает дату']],
 };
-const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans(), puzzles: () => {}, questions: () => {} };
+const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans(), puzzles: () => {}, questions: () => {}, memories: () => {} };
 let admTab = 'notes', admRows = [], editing = null;
 const sheet = $('#sheet');
 
@@ -948,7 +956,7 @@ function initImagePick(row) {
     if (!isImg(f)) { toast('Это не картинка'); replay(pick, 'shake'); return; }
     cta.textContent = '⏳ Обрабатываю…';
     try {
-      pendingImg = await processImage(f);
+      pendingImg = await processImage(f, admTab === 'memories' ? 720 : 1080);
       prev.src = pendingImg.preview; prev.hidden = false; cta.textContent = '✓ ' + f.name;
       replay(prev, 'pop-in'); buzz();
     } catch (e) {
@@ -958,7 +966,7 @@ function initImagePick(row) {
   });
 }
 // сжимаем на телефоне: полное фото ~1080px, превью для пульта и маленький размытый «тизер»
-async function processImage(file) {
+async function processImage(file, max = 1080) {
   const src = URL.createObjectURL(file), img = new Image(); img.src = src; await img.decode();
   let w = img.naturalWidth, h = img.naturalHeight, sx = 0, sy = 0;
   const a = w / h;
@@ -970,7 +978,7 @@ async function processImage(file) {
     c.getContext('2d').drawImage(img, sx, sy, w, h, 0, 0, c.width, c.height);
     return c.toDataURL('image/jpeg', q);
   };
-  const res = { image: out(1080, .82), preview: out(260, .72), thumb: out(14, .6) };
+  const res = { image: out(max, .82), preview: out(260, .72), thumb: out(14, .6) };
   URL.revokeObjectURL(src); return res;
 }
 $('#admAdd').onclick = () => openSheet(null);
@@ -987,6 +995,7 @@ $('#sheetSave').onclick = async () => {
     if (type === 'image') {
       if (pendingImg) Object.assign(data, pendingImg);
       else if (!editing) { toast('Выбери фото'); replay($('.img-pick', sheet), 'shake'); return; }
+      if (admTab === 'memories') delete data.thumb;
       continue;
     }
     const el = $(`[name="${k}"]`, sheet);
@@ -1011,6 +1020,106 @@ $('#sheetDel').onclick = async () => {
   catch (e) { console.error(e); toast(errMsg(e)); }
 };
 $('#logout').onclick = () => { store.set('adm', null); location.reload(); };
+
+/* ================= ✨ её вход: вжух ================= */
+let memCache = [], memLoading = null;
+function preloadMemories() {
+  if (memLoading) return memLoading;
+  memLoading = db('memories?select=image,caption&order=id.desc&limit=16').then(rows => Promise.all(rows.map(async r => {
+    const img = new Image(); img.src = r.image;
+    try { await img.decode(); memCache.push({ img, caption: r.caption }); } catch (e) {}
+  }))).catch(e => console.error(e));
+  return memLoading;
+}
+
+function warpStars(cv) {
+  const g = cv.getContext('2d'), stars = [], COL = ['#FFFFFF', '#FFD3E8', '#FF8FC1', '#C9B2FF', '#FFE59A'];
+  let W, H, speed = .002, target = .002, raf = 0;
+  const resize = () => { const d = Math.min(2, devicePixelRatio || 1); W = innerWidth; H = innerHeight; cv.width = W * d; cv.height = H * d; g.setTransform(d, 0, 0, d, 0, 0); };
+  const spawn = s => { s.x = Math.random() * 2 - 1; s.y = Math.random() * 2 - 1; s.z = s.pz = .2 + Math.random() * .8; s.c = COL[Math.random() * COL.length | 0]; return s; };
+  for (let i = 0; i < 360; i++) stars.push(spawn({}));
+  const frame = () => {
+    speed += (target - speed) * .07;
+    g.clearRect(0, 0, W, H); g.lineCap = 'round';
+    const k = Math.max(W, H) * .5;
+    for (const s of stars) {
+      s.pz = s.z; s.z -= speed;
+      if (s.z <= .02) { spawn(s); continue; }
+      const x = W / 2 + s.x / s.z * k, y = H / 2 + s.y / s.z * k, px = W / 2 + s.x / s.pz * k, py = H / 2 + s.y / s.pz * k;
+      if (x < -50 || x > W + 50 || y < -50 || y > H + 50) { spawn(s); continue; }
+      g.strokeStyle = s.c; g.globalAlpha = Math.min(1, (1 - s.z) * 1.4); g.lineWidth = (1 - s.z) * 3.2;
+      g.beginPath(); g.moveTo(px, py); g.lineTo(x + .1, y); g.stroke();
+    }
+    g.globalAlpha = 1; raf = requestAnimationFrame(frame);
+  };
+  resize(); frame();
+  return { speed: v => target = v, stop: () => cancelAnimationFrame(raf) };
+}
+
+function entrance(done) {
+  const warp = $('#warp'), space = $('#warpSpace'), fin = $('#warpFinal'), intro = $('#intro');
+  const short = store.get('warpDay') === dateIn(Date.now()); // второй вход за день — короче
+  store.set('warpDay', dateIn(Date.now()));
+  const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
+  let stars, finished = false;
+  const days = Math.floor(Math.max(0, END - Date.now()) / DAY);
+  fin.innerHTML = `<p class="wf-name"></p><p class="wf-line">я очень скучаю 💗</p><p class="wf-days"><b>${days}</b> ${plural(days, DAYS)} до встречи</p>`;
+  $('.wf-name', fin).textContent = C.HER_NAME + ',';
+
+  function finish() {
+    if (finished) return; finished = true;
+    timers.forEach(clearTimeout); $('#warpSkip').hidden = true;
+    warp.classList.add('out'); done();
+    setTimeout(() => { stars && stars.stop(); warp.hidden = true; warp.className = 'warp'; space.innerHTML = ''; }, 900);
+  }
+  $('#warpSkip').onclick = finish;
+
+  // 1. вжух: сердце раздувается во весь экран
+  intro.classList.add('vzhuh'); buzz(20);
+  $('.intro-heart').animate([
+    { transform: 'scale(1)', opacity: 1 },
+    { transform: 'scale(.8)', offset: .18 },
+    { transform: 'scale(22)', opacity: 1, offset: .8 },
+    { transform: 'scale(26)', opacity: 0 },
+  ], { duration: 950, easing: 'cubic-bezier(.6,0,.35,1)', fill: 'forwards' });
+  at(450, () => {
+    warp.hidden = false; void warp.offsetWidth; warp.classList.add('on');
+    stars = warpStars($('#warpCv')); stars.speed(.045); navigator.vibrate && navigator.vibrate([15, 30, 15, 30, 40]);
+  });
+  at(800, () => { intro.style.visibility = 'hidden'; stars.speed(.014); $('#warpSkip').hidden = false; });
+
+  // 2. летят воспоминания
+  const texts = [...(reasons || [])].sort(() => Math.random() - .5);
+  const EMO = ['💗', '💌', '✨', '🫶', '💖', '🌙', '⭐'];
+  let n = 0;
+  function card() {
+    const el = document.createElement('div'), mem = memCache.length ? memCache[n % memCache.length] : null;
+    const kind = mem && n % 3 !== 2 ? 'photo' : texts.length && n % 3 === 2 ? 'text' : 'emo';
+    el.className = 'wcard ' + kind;
+    if (kind === 'photo') { el.append(mem.img.cloneNode()); if (mem.caption) { const c = document.createElement('span'); c.textContent = mem.caption; el.append(c); } }
+    else if (kind === 'text') el.textContent = texts[n % texts.length];
+    else el.textContent = EMO[n % EMO.length];
+    space.append(el);
+    const a = Math.random() * Math.PI * 2, R = 170 + Math.random() * 140, r0 = Math.random() * 40 - 20;
+    const x = Math.cos(a) * R, y = Math.sin(a) * R * 1.25;
+    el.animate([
+      { transform: `translate3d(${x * .25}px,${y * .25}px,-2600px) rotate(${r0}deg)`, opacity: 0 },
+      { opacity: 1, offset: .18 },
+      { opacity: 1, offset: .82 },
+      { transform: `translate3d(${x}px,${y}px,720px) rotate(${r0 * -1.5}deg)`, opacity: 0 },
+    ], { duration: 2500, easing: 'cubic-bezier(.5,0,.9,.6)', fill: 'forwards' }).onfinish = () => el.remove();
+    n++;
+  }
+  const FLY = short ? 0 : 3600, STEP = 260;
+  for (let t = 900; t < 900 + FLY; t += STEP) at(t, card);
+
+  // 3. разгон, вспышка, «привет»
+  const T = 900 + FLY + (short ? 400 : 1400);
+  at(T - 600, () => stars.speed(.07));
+  at(T, () => { warp.classList.add('flash'); navigator.vibrate && navigator.vibrate(60); });
+  at(T + 250, () => { stars.speed(.004); warp.classList.add('final'); fx.burst(innerWidth / 2, innerHeight * .42, ['💗', '✨', '💖', '💫'], 50, 1.2); });
+  at(T + (short ? 1700 : 2600), finish);
+}
 
 /* ================= старт ================= */
 loadNote(); loadLetters(); loadJar(); loadPlans(); loadMood();

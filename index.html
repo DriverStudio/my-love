@@ -8,7 +8,7 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;700;800&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body>
 <canvas id="fx"></canvas>
@@ -38,6 +38,15 @@
     <button class="btn" id="quizBtn">Ответить</button>
     <div class="quiz-links"><button class="link" id="quizOther" hidden>Другой вопрос</button><button class="link" id="quizBack">Назад</button></div>
   </div>
+</div>
+
+<!-- её вход -->
+<div class="warp" id="warp" hidden>
+  <canvas id="warpCv"></canvas>
+  <div class="warp-space" id="warpSpace"></div>
+  <div class="warp-flash"></div>
+  <div class="warp-final" id="warpFinal"></div>
+  <button class="warp-skip" id="warpSkip" hidden>Пропустить</button>
 </div>
 
 <main id="app">
@@ -213,8 +222,8 @@
     document.body.appendChild(d);
   };
 </script>
-<script src="config.js?v=10"></script>
+<script src="config.js?v=11"></script>
 <script>if (!window.CONFIG) window.onerror('config.js не загрузился или в нём ошибка (запятая, кавычка)', 'config.js', 0);</script>
-<script src="app.js?v=10"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>
