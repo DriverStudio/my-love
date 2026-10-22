@@ -5,7 +5,11 @@
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
 [hidden] { display: none !important; }
-html, body { height: 100%; overflow: hidden; background: var(--plum); }
+html, body { height: 100%; overflow: hidden; background: var(--plum); overscroll-behavior: none; }
+html { touch-action: manipulation; } /* без зума по двойному тапу (быстрые тапы в играх) */
+body { -webkit-user-select: none; user-select: none; -webkit-touch-callout: none; }
+input, textarea, select, .letter p, #noteText { -webkit-user-select: text; user-select: text; }
+.content { overscroll-behavior: contain; }
 body {
   font: 500 16px/1.5 Manrope, system-ui, sans-serif; color: #fff;
   -webkit-text-size-adjust: 100%; -webkit-tap-highlight-color: transparent; overscroll-behavior: none;

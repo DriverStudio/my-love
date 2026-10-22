@@ -134,14 +134,40 @@ function go(i, ox = innerWidth / 2, oy = innerHeight / 2) {
 }
 navBtns.forEach((b, k) => b.onclick = () => { const r = b.getBoundingClientRect(); go(k, r.left + r.width / 2, r.top + r.height / 2); });
 
-// свайпы
-let sx = 0, sy = 0, st = 0;
-$('#app').addEventListener('touchstart', e => { const t = e.touches[0]; sx = t.clientX; sy = t.clientY; st = Date.now(); }, { passive: true });
-$('#app').addEventListener('touchend', e => {
-  const t = e.changedTouches[0], dx = t.clientX - sx, dy = t.clientY - sy;
-  if (sx < 24 || Date.now() - st > 700) return; // край экрана = жест «назад» в ТГ
-  if (Math.abs(dx) > 70 && Math.abs(dx) > Math.abs(dy) * 1.6) go(cur + (dx < 0 ? 1 : -1), dx < 0 ? innerWidth : 0, t.clientY);
+// свайпы между экранами — только «чистые» горизонтальные, не с краёв и не по прокручиваемым штукам
+const EDGE = 36; // у краёв живут системные жесты «назад» (iPhone, Android с жестами)
+const NOSWIPE = 'input, textarea, select, .tabs, .tools, .swatches, .noswipe';
+function scrollsX(el) {
+  for (; el && el !== document.body; el = el.parentElement) {
+    if (el.scrollWidth > el.clientWidth + 2 && /(auto|scroll)/.test(getComputedStyle(el).overflowX)) return true;
+  }
+  return false;
+}
+let sw = null;
+$('#app').addEventListener('touchstart', e => {
+  const t = e.touches[0];
+  sw = null;
+  if (e.touches.length > 1 || busy) return;
+  if (t.clientX < EDGE || t.clientX > innerWidth - EDGE) return;
+  if (e.target.closest(NOSWIPE) || scrollsX(e.target)) return;
+  sw = { x: t.clientX, y: t.clientY, t: Date.now(), dead: false };
 }, { passive: true });
+$('#app').addEventListener('touchmove', e => {
+  if (!sw || sw.dead) return;
+  const t = e.touches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
+  if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) sw.dead = true; // человек листает вниз — не мешаем
+}, { passive: true });
+$('#app').addEventListener('touchend', e => {
+  if (!sw || sw.dead || e.touches.length) { sw = null; return; }
+  const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, dt = Date.now() - sw.t;
+  sw = null;
+  if (dt > 650 || Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 2) return;
+  go(cur + (dx < 0 ? 1 : -1), dx < 0 ? innerWidth : 0, t.clientY);
+}, { passive: true });
+$('#app').addEventListener('touchcancel', () => sw = null, { passive: true });
+
+// iPhone: не даём странице/ТГ утаскивать экран, пока двигаешь пазл или рисуешь
+$('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board, .board')) e.preventDefault(); }, { passive: false });
 
 /* ================= интро ================= */
 (function intro() {
