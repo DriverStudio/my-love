@@ -24,6 +24,8 @@ async function db(path, opts = {}) {
   return t ? JSON.parse(t) : null;
 }
 const pad = n => String(n).padStart(2, '0');
+const fmtT = s => `${Math.floor(s / 60)}:${pad(s % 60)}`;
+const DIFF = { 3: 'Лёгкий', 4: 'Средний', 5: 'Сложный', 6: 'Хардкор', 8: 'Безумие' };
 const plural = (n, f) => f[n % 10 === 1 && n % 100 !== 11 ? 0 : n % 10 >= 2 && n % 10 <= 4 && (n % 100 < 10 || n % 100 >= 20) ? 1 : 2];
 const DAYS = ['день', 'дня', 'дней'];
 const dateIn = ms => new Date(ms).toLocaleDateString('sv-SE', { timeZone: C.TZ });
@@ -193,15 +195,17 @@ const clockCols = [];
   }
   el.innerHTML = html; clockCols.push(...$$('.col', el));
 })();
+
 let daysLive = false;
 function tick() {
   const ms = Math.max(0, END - Date.now()), d = Math.floor(ms / DAY), s = Math.floor(ms / 1000) % 86400;
   const str = pad(Math.floor(s / 3600)) + pad(Math.floor(s / 60) % 60) + pad(s % 60);
-  [...str].forEach((ch, k) => clockCols[k].style.transform = `translateY(-${ch * 1.25}em)`);
+  [...str].forEach((ch, k) => clockCols[k].style.transform = `translateY(-${ch * 1.4}em)`);
   if (daysLive) $('#days').textContent = d;
   $('#daysLabel').textContent = plural(d, DAYS) + ' до дембеля';
 }
 tick(); setInterval(tick, 1000);
+
 
 function drawTape() {
   const left = Math.max(0, Math.ceil((END - Date.now()) / DAY));
@@ -437,6 +441,179 @@ function closeLayer() {
 }
 $('#layerX').onclick = closeLayer;
 
+/* ---------- 🧩 пазлы ---------- */
+GAMES.puzzle = (() => {
+  let root, st = null, ro = null;
+  const key = id => 'pz' + id;
+
+  function shuffle(n) {
+    let best = null;
+    for (let tries = 0; tries < 30; tries++) {
+      const a = [...Array(n).keys()];
+      for (let i = n - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; }
+      const fixed = a.filter((v, i) => v === i).length;
+      if (!best || fixed < best.f) best = { a, f: fixed };
+      if (fixed === 0) break;
+    }
+    return best.a;
+  }
+
+  async function showList() {
+    stop(); $('#layerTitle').textContent = 'Пазлы';
+    root.innerHTML = '<div class="pz-list" id="pzList"><p class="err">Загружаю…</p></div>';
+    let list;
+    try { list = await db('puzzles?select=id,hint,cols,message,thumb,preview,solved_at,best_time&order=id.desc'); }
+    catch (e) { console.error(e); fail($('#pzList')); return; }
+    const box = $('#pzList'); if (!box) return;
+    if (!list.length) { box.innerHTML = `<p class="err">Пазлов пока нет. ${isAdmin ? 'Добавь в пульте 🧩' : 'Скоро появятся 😉'}</p>`; return; }
+    box.innerHTML = '';
+    list.forEach((p, i) => {
+      const saved = store.get(key(p.id)), solved = !!p.solved_at;
+      const b = document.createElement('button'); b.className = 'pz-card'; b.style.animationDelay = i * 70 + 'ms';
+      b.innerHTML = `<div class="pz-thumb${solved ? ' solved' : ''}"><i></i>${solved ? '' : '<span class="pz-q">?</span>'}<span class="pz-badge"></span></div><b></b><small></small>`;
+      $('i', b).style.backgroundImage = `url("${solved ? p.preview || p.thumb : p.thumb}")`;
+      $('.pz-badge', b).textContent = DIFF[p.cols] || `${p.cols}×${p.cols}`;
+      $('b', b).textContent = p.hint || (solved ? 'Собрано' : 'Что же тут?');
+      $('small', b).textContent = solved ? `✓ ${fmtT(p.best_time || 0)}` : saved ? '▶ Продолжить' : 'Нажми, чтобы собрать';
+      b.onclick = () => { buzz(); start(p); };
+      box.append(b);
+    });
+  }
+
+  async function start(p) {
+    $('#layerTitle').textContent = p.hint || 'Пазл';
+    root.innerHTML = `
+      <div class="pz-bar"><span class="pz-stat" id="pzTime">0:00</span><span class="pz-stat" id="pzMoves">0 ходов</span>
+        <button class="chip" id="pzPeek">👁 Подсмотреть</button></div>
+      <div class="pz-stage" id="pzStage"><div class="pz-board" id="pzBoard"><div class="pz-ghost"></div></div><p class="pz-loading">Загружаю картинку…</p></div>
+      <div class="pz-foot" id="pzFoot"><button class="link" id="pzBack">← Все пазлы</button></div>`;
+    $('#pzBack').onclick = showList;
+    try {
+      const [row] = await db(`puzzles?select=image&id=eq.${p.id}`);
+      const url = URL.createObjectURL(await (await fetch(row.image)).blob());
+      const img = new Image(); img.src = url; await img.decode();
+      if (!$('#pzBoard')) { URL.revokeObjectURL(url); return; } // успела выйти
+      setup(p, url, img.naturalWidth, img.naturalHeight);
+    } catch (e) { console.error(e); const l = $('.pz-loading'); if (l) l.textContent = 'Не загрузилось, проверь интернет'; }
+  }
+
+  function setup(p, url, iw, ih) {
+    $('.pz-loading').remove();
+    const cols = +p.cols, rows = Math.max(2, Math.round(cols * ih / iw)), n = cols * rows;
+    const saved = store.get(key(p.id));
+    const order = saved && saved.order && saved.order.length === n ? saved.order : shuffle(n);
+    const board = $('#pzBoard');
+    st = { p, url, cols, rows, n, aspect: iw / ih, board, tiles: [], sel: null, done: false, gap: n > 30 ? 2 : 3,
+      moves: saved ? saved.moves : 0, secs: saved ? saved.secs : 0, timer: 0 };
+    $('.pz-ghost', board).style.backgroundImage = `url(${url})`;
+    for (let h = 0; h < n; h++) {
+      const el = document.createElement('div'), c = h % cols, r = Math.floor(h / cols);
+      el.className = 'tile';
+      el.style.backgroundImage = `url(${url})`;
+      el.style.backgroundSize = `${cols * 100}% ${rows * 100}%`;
+      el.style.backgroundPosition = `${c / (cols - 1) * 100}% ${r / (rows - 1) * 100}%`;
+      const t = { el, home: h, pos: order[h], locked: false };
+      t.locked = t.pos === t.home; if (t.locked) el.classList.add('ok');
+      st.tiles.push(t); board.append(el); bind(t);
+    }
+    stats(); layout();
+    // раздача: кусочки вылетают из центра
+    st.tiles.forEach(t => { t.el.style.transition = 'none'; t.el.style.opacity = 0; t.el.style.transform = `translate(${(st.bw - st.tw) / 2}px,${(st.bh - st.th) / 2}px) scale(.2) rotate(${Math.random() * 60 - 30}deg)`; });
+    void board.offsetWidth;
+    st.tiles.forEach(t => { t.el.style.transition = ''; t.el.style.transitionDelay = (reduce ? 0 : Math.random() * 450 | 0) + 'ms'; t.el.style.opacity = 1; place(t); });
+    setTimeout(() => st && st.tiles.forEach(t => t.el.style.transitionDelay = ''), 1000);
+    ro = new ResizeObserver(layout); ro.observe($('#pzStage'));
+    st.timer = setInterval(() => {
+      if (document.hidden || !st || st.done) return;
+      st.secs++; $('#pzTime').textContent = fmtT(st.secs); if (st.secs % 5 === 0) save();
+    }, 1000);
+    const peek = $('#pzPeek'), on = () => board.classList.add('peek'), off = () => board.classList.remove('peek');
+    peek.onpointerdown = on; peek.onpointerup = peek.onpointerleave = peek.onpointercancel = off;
+    peek.oncontextmenu = e => e.preventDefault();
+  }
+
+  function layout() {
+    const stage = $('#pzStage'); if (!stage || !st) return;
+    const sw = stage.clientWidth, sh = stage.clientHeight;
+    let bw = sw, bh = sw / st.aspect; if (bh > sh) { bh = sh; bw = sh * st.aspect; }
+    const g = st.done ? 0 : st.gap;
+    Object.assign(st, { bw, bh, g, tw: (bw - g * (st.cols - 1)) / st.cols, th: (bh - g * (st.rows - 1)) / st.rows });
+    st.board.style.width = bw + 'px'; st.board.style.height = bh + 'px';
+    st.tiles.forEach(t => { t.el.style.width = st.tw + 'px'; t.el.style.height = st.th + 'px'; if (!t.el.classList.contains('drag')) place(t); });
+  }
+  const cellXY = i => [(i % st.cols) * (st.tw + st.g), Math.floor(i / st.cols) * (st.th + st.g)];
+  function place(t, dx = 0, dy = 0, sc = 1) { const [x, y] = cellXY(t.pos); t.el.style.transform = `translate(${x + dx}px,${y + dy}px) scale(${sc})`; }
+  function stats() { $('#pzTime').textContent = fmtT(st.secs); $('#pzMoves').textContent = `${st.moves} ${plural(st.moves, ['ход', 'хода', 'ходов'])}`; }
+  function save() { if (st && !st.done) store.set(key(st.p.id), { order: st.tiles.map(t => t.pos), moves: st.moves, secs: st.secs }); }
+  function clearSel() { if (st.sel) { st.sel.el.classList.remove('sel'); st.sel = null; } }
+
+  function bind(t) {
+    const el = t.el; let sx = 0, sy = 0, drag = false, pid = null;
+    el.onpointerdown = e => {
+      if (st.done) return;
+      if (t.locked) { replay(el, 'nope'); return; }
+      pid = e.pointerId; el.setPointerCapture(pid); sx = e.clientX; sy = e.clientY; drag = false;
+    };
+    el.onpointermove = e => {
+      if (pid !== e.pointerId) return;
+      const dx = e.clientX - sx, dy = e.clientY - sy;
+      if (!drag && Math.hypot(dx, dy) > 7) { drag = true; clearSel(); el.classList.add('drag'); }
+      if (drag) place(t, dx, dy, 1.08);
+    };
+    el.onpointerup = e => {
+      if (pid !== e.pointerId) return; pid = null;
+      if (!drag) return tap(t);
+      el.classList.remove('drag');
+      const r = st.board.getBoundingClientRect();
+      const c = Math.floor((e.clientX - r.left) / (st.tw + st.g)), rr = Math.floor((e.clientY - r.top) / (st.th + st.g));
+      const target = c >= 0 && c < st.cols && rr >= 0 && rr < st.rows ? rr * st.cols + c : -1;
+      const other = st.tiles.find(o => o.pos === target);
+      if (!other || other === t || other.locked) { place(t); return; }
+      swap(t, other);
+    };
+    el.onpointercancel = () => { pid = null; el.classList.remove('drag'); place(t); };
+  }
+  function tap(t) {
+    if (!st.sel) { st.sel = t; t.el.classList.add('sel'); buzz(5); return; }
+    if (st.sel === t) { clearSel(); return; }
+    const a = st.sel; clearSel(); swap(a, t);
+  }
+  function swap(a, b) {
+    [a.pos, b.pos] = [b.pos, a.pos];
+    a.el.style.zIndex = 4; b.el.style.zIndex = 3;
+    place(a); place(b);
+    setTimeout(() => { a.el.style.zIndex = ''; b.el.style.zIndex = ''; }, 380);
+    st.moves++; stats(); buzz(8);
+    let hit = false;
+    for (const t of [a, b]) if (t.pos === t.home) {
+      t.locked = true; t.el.classList.add('ok'); replay(t.el, 'flash'); hit = true;
+      setTimeout(() => fx.at(t.el, ['✨'], 6, .5), 250);
+    }
+    if (hit) buzz(20);
+    save();
+    if (st.tiles.every(t => t.locked)) setTimeout(win, 350);
+  }
+  function win() {
+    st.done = true; clearInterval(st.timer); store.set(key(st.p.id), null);
+    st.board.classList.add('solved'); layout();
+    navigator.vibrate && navigator.vibrate([40, 60, 80]);
+    const r = st.board.getBoundingClientRect();
+    [0, 1, 2].forEach(i => setTimeout(() => fx.burst(r.left + r.width * (.2 + .3 * i), r.top + r.height * .45, ['💖', '✨', '🎉', '💗'], 36, 1.3), 500 + i * 220));
+    $('#pzPeek').hidden = true;
+    const w = document.createElement('div'); w.className = 'pz-win';
+    w.innerHTML = `<b>Собрано! 🎉</b><span>${fmtT(st.secs)}, ${st.moves} ${plural(st.moves, ['ход', 'хода', 'ходов'])}</span>${st.p.message ? '<p></p>' : ''}`;
+    if (st.p.message) $('p', w).textContent = st.p.message;
+    $('#pzFoot').prepend(w);
+    if (!isAdmin) rpc('puzzle_solved', { pid: st.p.id, secs: st.secs }).catch(e => console.error(e));
+  }
+  function stop() {
+    if (!st) return;
+    save(); clearInterval(st.timer); ro && ro.disconnect(); ro = null;
+    URL.revokeObjectURL(st.url); st = null;
+  }
+  return { title: 'Пазлы', open(r) { root = r; showList(); }, close: stop };
+})();
+
 /* ---------- 🎨 рисуем вдвоём ---------- */
 GAMES.draw = (() => {
   const COLORS = ['#3A1240', '#FF3D8B', '#FF9E7A', '#FFC93C', '#3CCB8E', '#3D8BFF', '#9B6BFF', '#FFFDF6'];
@@ -558,7 +735,13 @@ const T = {
     label: r => (r.approved ? '' : '⏳ ') + r.text,
     meta: r => [r.approved ? '' : 'Она предложила, ждёт твоего «да»', r.by_her && r.approved ? 'идея от неё' : '', r.done ? '✓ сделали' : '', r.liked ? '❤ она хочет' : ''].filter(Boolean).join(', ') },
 };
-const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans() };
+T.puzzles = { name: 'Пазлы', one: 'пазл',
+  fields: [['image', 'Фото для пазла', 'image'], ['cols', 'Сложность', 'select'],
+           ['hint', 'Загадка на карточке (необязательно)', 'text', 1], ['message', 'Что она увидит, когда соберёт (необязательно)', 'area', 1]],
+  label: r => r.hint || 'Без загадки',
+  meta: r => `${DIFF[r.cols] || r.cols}, ` + (r.solved_at ? `✓ собрала за ${fmtT(r.best_time || 0)}` : 'ещё не собрала') };
+const SELECTS = { cols: Object.entries(DIFF).map(([v, n]) => [v, `${n}, ${v}×${v}`]) };
+const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans(), puzzles: () => {} };
 let admTab = 'notes', admRows = [], editing = null;
 const sheet = $('#sheet');
 
@@ -582,6 +765,7 @@ function renderAdm() {
     const b = document.createElement('button'); b.className = 'adm-item'; b.style.animationDelay = i * 40 + 'ms';
     b.innerHTML = '<b></b><small></small>';
     $('b', b).textContent = t.label(r); $('small', b).textContent = t.meta(r);
+    if (r.preview) { b.classList.add('has-img'); const im = new Image(); im.src = r.preview; im.alt = ''; b.prepend(im); }
     b.onclick = () => openSheet(r);
     list.append(b);
   });
@@ -591,6 +775,10 @@ function openSheet(row) {
   $('#sheetTitle').textContent = row ? 'Изменить ' + t.one : 'Добавить ' + t.one;
   $('#sheetFields').innerHTML = t.fields.map(([k, l, type]) => type === 'check'
     ? `<label class="chk"><input type="checkbox" name="${k}"><span>${l}</span></label>`
+    : type === 'image'
+    ? `<div class="field"><span>${l}</span><label class="img-pick"><input type="file" accept="image/*" hidden><img class="img-prev" alt="" hidden><span class="img-cta">📷 Выбрать фото</span></label></div>`
+    : type === 'select'
+    ? `<label class="field"><span>${l}</span><select name="${k}">${SELECTS[k].map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select></label>`
     : type === 'color'
     ? `<div class="field"><span>${l}</span><div class="pal-row"><div class="env env-mini c0" id="envPrev"><div class="env-box"><div class="env-back"></div><div class="env-paper"></div><div class="env-front"></div><div class="env-flap"></div><div class="env-seal">❤</div></div></div><div class="swatches" id="swatches"></div></div><div class="pal-actions"><button type="button" class="chip" id="palGen">🎲 Другие цвета</button><label class="chip">🎨 Свой<input type="color" name="${k}"></label></div></div>`
     : `<label class="field"><span>${l}</span>${type === 'area' ? `<textarea name="${k}" rows="${k === 'body' ? 9 : 3}"></textarea>` : `<input name="${k}" type="${type}">`}</label>`).join('');
@@ -598,6 +786,8 @@ function openSheet(row) {
     const el = $(`[name="${k}"]`, sheet);
     if (type === 'check') el.checked = row ? !!row[k] : k === 'approved';
     else if (type === 'color') initPalette(el, row && row[k]);
+    else if (type === 'image') initImagePick(row);
+    else if (type === 'select') el.value = row ? row[k] : '4';
     else el.value = row ? (row[k] ?? '') : type === 'date' ? defaultDate(k) : '';
   });
   const del = $('#sheetDel'); del.hidden = !row; del.classList.remove('arm'); del.textContent = 'Удалить';
@@ -629,6 +819,37 @@ function initPalette(input, current) {
   const pal = fill();
   pick(current && /^#[0-9a-f]{6}$/i.test(current) ? current : pal[0]);
 }
+let pendingImg = null;
+function initImagePick(row) {
+  pendingImg = null;
+  const pick = $('.img-pick', sheet), inp = $('input', pick), prev = $('.img-prev', pick), cta = $('.img-cta', pick);
+  if (row && row.preview) { prev.src = row.preview; prev.hidden = false; cta.textContent = '📷 Заменить фото'; }
+  inp.onchange = async () => {
+    const f = inp.files[0]; if (!f) return;
+    cta.textContent = '⏳ Обрабатываю…';
+    try {
+      pendingImg = await processImage(f);
+      prev.src = pendingImg.preview; prev.hidden = false; cta.textContent = '📷 Заменить фото';
+      replay(prev, 'pop-in'); buzz();
+    } catch (e) { console.error(e); cta.textContent = '📷 Выбрать фото'; toast('Не получилось открыть фото'); }
+  };
+}
+// сжимаем на телефоне: полное фото ~1080px, превью для пульта и маленький размытый «тизер»
+async function processImage(file) {
+  const src = URL.createObjectURL(file), img = new Image(); img.src = src; await img.decode();
+  let w = img.naturalWidth, h = img.naturalHeight, sx = 0, sy = 0;
+  const a = w / h;
+  if (a < .6) { const nh = w / .6; sy = (h - nh) / 2; h = nh; }
+  else if (a > 1.5) { const nw = h * 1.5; sx = (w - nw) / 2; w = nw; }
+  const out = (max, q) => {
+    const k = Math.min(1, max / Math.max(w, h)), c = document.createElement('canvas');
+    c.width = Math.round(w * k); c.height = Math.round(h * k);
+    c.getContext('2d').drawImage(img, sx, sy, w, h, 0, 0, c.width, c.height);
+    return c.toDataURL('image/jpeg', q);
+  };
+  const res = { image: out(1080, .82), preview: out(260, .72), thumb: out(14, .6) };
+  URL.revokeObjectURL(src); return res;
+}
 $('#admAdd').onclick = () => openSheet(null);
 $('#sheetX').onclick = () => sheet.close();
 
@@ -639,17 +860,22 @@ async function afterChange(msg) {
 }
 $('#sheetSave').onclick = async () => {
   const t = T[admTab], data = {};
-  for (const [k, l, type] of t.fields) {
+  for (const [k, l, type, opt] of t.fields) {
+    if (type === 'image') {
+      if (pendingImg) Object.assign(data, pendingImg);
+      else if (!editing) { toast('Выбери фото'); replay($('.img-pick', sheet), 'shake'); return; }
+      continue;
+    }
     const el = $(`[name="${k}"]`, sheet);
     data[k] = type === 'check' ? el.checked : el.value.trim();
-    if (type !== 'check' && !data[k]) { toast(`Заполни «${l}»`); replay(el, 'shake'); el.focus(); return; }
+    if (type !== 'check' && !opt && !data[k]) { toast(`Заполни «${l}»`); replay(el, 'shake'); el.focus(); return; }
   }
-  const btn = $('#sheetSave'); btn.disabled = true;
+  const btn = $('#sheetSave'); btn.disabled = true; btn.textContent = data.image ? 'Загружаю…' : 'Сохраняю…';
   try {
     await rpc('admin_save', { p: adminPass, tbl: admTab, row_id: editing ? editing.id : null, d: data });
     await afterChange(editing ? 'Сохранено' : 'Добавлено');
   } catch (e) { console.error(e); toast(errMsg(e)); }
-  finally { btn.disabled = false; }
+  finally { btn.disabled = false; btn.textContent = 'Сохранить'; }
 };
 $('#sheetDel').onclick = async () => {
   const del = $('#sheetDel');
