@@ -513,20 +513,24 @@ GAMES.puzzle = (() => {
     stop(); $('#layerTitle').textContent = 'Пазлы';
     root.innerHTML = '<div class="pz-list" id="pzList"><p class="err">Загружаю…</p></div>';
     let list;
-    try { list = await db('puzzles?select=id,hint,cols,message,thumb,preview,solved_at,best_time&order=id.desc'); }
+    try { list = await db('puzzles?select=id,hint,cols,message,thumb,preview,solved_at,best_time,rotate,opens_at&order=id.desc'); }
     catch (e) { console.error(e); fail($('#pzList')); return; }
     const box = $('#pzList'); if (!box) return;
     if (!list.length) { box.innerHTML = `<p class="err">Пазлов пока нет. ${isAdmin ? 'Добавь в пульте 🧩' : 'Скоро появятся 😉'}</p>`; return; }
     box.innerHTML = '';
     list.forEach((p, i) => {
       const saved = store.get(key(p.id)), solved = !!p.solved_at;
-      const b = document.createElement('button'); b.className = 'pz-card'; b.style.animationDelay = i * 70 + 'ms';
-      b.innerHTML = `<div class="pz-thumb${solved ? ' solved' : ''}"><i></i>${solved ? '' : '<span class="pz-q">?</span>'}<span class="pz-badge"></span></div><b></b><small></small>`;
+      const lockDays = p.opens_at ? Math.ceil((new Date(p.opens_at + 'T00:00:00') - Date.now()) / DAY) : 0, locked = lockDays > 0 && !isAdmin;
+      const b = document.createElement('button'); b.className = 'pz-card' + (locked ? ' locked' : ''); b.style.animationDelay = i * 70 + 'ms';
+      b.innerHTML = `<div class="pz-thumb${solved ? ' solved' : ''}"><i></i>${solved ? '' : `<span class="pz-q">${locked ? '🔒' : '?'}</span>`}<span class="pz-badge"></span></div><b></b><small></small>`;
       $('i', b).style.backgroundImage = `url("${solved ? p.preview || p.thumb : p.thumb}")`;
-      $('.pz-badge', b).textContent = DIFF[p.cols] || `${p.cols}×${p.cols}`;
+      $('.pz-badge', b).textContent = (DIFF[p.cols] || `${p.cols}×${p.cols}`) + (p.rotate ? ' 🔄' : '');
       $('b', b).textContent = p.hint || (solved ? 'Собрано' : 'Что же тут?');
-      $('small', b).textContent = solved ? `✓ ${fmtT(p.best_time || 0)}` : saved ? '▶ Продолжить' : 'Нажми, чтобы собрать';
-      b.onclick = () => { buzz(); start(p); };
+      $('small', b).textContent = locked ? `Откроется через ${lockDays} ${plural(lockDays, DAYS)}` : solved ? `✓ ${fmtT(p.best_time || 0)}` : saved ? '▶ Продолжить' : 'Нажми, чтобы собрать';
+      b.onclick = () => {
+        if (locked) { replay($('.pz-thumb', b), 'wiggle'); buzz(25); toast('Откроется ' + fmtDate(p.opens_at)); return; }
+        buzz(); start(p);
+      };
       box.append(b);
     });
   }
@@ -537,7 +541,7 @@ GAMES.puzzle = (() => {
       <div class="pz-bar"><span class="pz-stat" id="pzTime">0:00</span><span class="pz-stat" id="pzMoves">0 ходов</span>
         <button class="chip" id="pzPeek">👁 Подсмотреть</button></div>
       <div class="pz-stage" id="pzStage"><div class="pz-board" id="pzBoard"><div class="pz-ghost"></div></div><p class="pz-loading">Загружаю картинку…</p></div>
-      <div class="pz-foot" id="pzFoot"><button class="link" id="pzBack">← Все пазлы</button></div>`;
+      <div class="pz-foot" id="pzFoot">${p.rotate ? '<p class="pz-tip">Тап — повернуть, тащи — переставить</p>' : ''}<button class="link" id="pzBack">← Все пазлы</button></div>`;
     $('#pzBack').onclick = showList;
     try {
       const [row] = await db(`puzzles?select=image&id=eq.${p.id}`);
@@ -554,18 +558,21 @@ GAMES.puzzle = (() => {
     const saved = store.get(key(p.id));
     const order = saved && saved.order && saved.order.length === n ? saved.order : shuffle(n);
     const board = $('#pzBoard');
-    st = { p, url, cols, rows, n, aspect: iw / ih, board, tiles: [], sel: null, done: false, gap: n > 30 ? 2 : 3,
+    const rotOn = !!p.rotate;
+    const rots = saved && saved.rot && saved.rot.length === n ? saved.rot
+      : [...Array(n)].map(() => rotOn ? (Math.random() < .2 ? 0 : 1 + Math.floor(Math.random() * 3)) : 0);
+    st = { p, url, cols, rows, n, iw, ih, rotOn, aspect: cols / rows, board, tiles: [], sel: null, done: false, gap: n > 30 ? 2 : 3,
       moves: saved ? saved.moves : 0, secs: saved ? saved.secs : 0, timer: 0 };
     $('.pz-ghost', board).style.backgroundImage = `url(${url})`;
     for (let h = 0; h < n; h++) {
       const el = document.createElement('div'); el.className = 'tile';
       el.style.backgroundImage = `url(${url})`;
-      const t = { el, home: h, pos: order[h], conn: {}, g: null };
+      const t = { el, home: h, pos: order[h], rot: rots[h], conn: {}, g: null };
       st.tiles.push(t); board.append(el); bind(t);
     }
     recompute(); st.tiles.forEach(t => t.vconn = { ...t.conn }); stats(); layout();
     // раздача: кусочки вылетают из центра
-    st.tiles.forEach(t => { t.el.style.transition = 'none'; t.el.style.opacity = 0; t.el.style.transform = `translate(${(st.bw - st.tw) / 2}px,${(st.bh - st.th) / 2}px) scale(.2) rotate(${Math.random() * 60 - 30}deg)`; });
+    st.tiles.forEach(t => { t.el.style.transition = 'none'; t.el.style.opacity = 0; t.el.style.transform = `translate3d(${(st.bw - st.tw) / 2}px,${(st.bh - st.th) / 2}px,0) rotate(${t.rot * 90 + Math.random() * 60 - 30}deg) scale(.2)`; });
     void board.offsetWidth;
     st.tiles.forEach(t => { t.el.style.transition = ''; t.el.style.transitionDelay = (reduce ? 0 : Math.random() * 450 | 0) + 'ms'; t.el.style.opacity = 1; render(t); });
     setTimeout(() => st && st.tiles.forEach(t => t.el.style.transitionDelay = ''), 1000);
@@ -580,7 +587,7 @@ GAMES.puzzle = (() => {
   }
 
   function stats() { $('#pzTime').textContent = fmtT(st.secs); $('#pzMoves').textContent = `${st.moves} ${plural(st.moves, ['ход', 'хода', 'ходов'])}`; }
-  function save() { if (st && !st.done) store.set(key(st.p.id), { order: st.tiles.map(t => t.pos), moves: st.moves, secs: st.secs }); }
+  function save() { if (st && !st.done) store.set(key(st.p.id), { order: st.tiles.map(t => t.pos), rot: st.tiles.map(t => t.rot), moves: st.moves, secs: st.secs }); }
 
   /* --- геометрия --- */
   const cr = i => [i % st.cols, Math.floor(i / st.cols)];
@@ -597,10 +604,12 @@ GAMES.puzzle = (() => {
     Object.assign(st, { bw, bh, g, tw: (bw - g * (st.cols - 1)) / st.cols, th: (bh - g * (st.rows - 1)) / st.rows });
     st.px = st.tw + g; st.py = st.th + g;
     st.board.style.width = bw + 'px'; st.board.style.height = bh + 'px';
+    // фото «обрезается по центру», чтобы кусочки были квадратными
+    const sc = Math.max(bw / st.iw, bh / st.ih), iw = st.iw * sc, ih = st.ih * sc, ox = (bw - iw) / 2, oy = (bh - ih) / 2;
     st.tiles.forEach(t => {
       const [hc, hr] = cr(t.home);
-      t.el.style.backgroundSize = `${bw}px ${bh}px`;
-      t.el.style.backgroundPosition = `${-hc * st.px}px ${-hr * st.py}px`;
+      t.el.style.backgroundSize = `${iw}px ${ih}px`;
+      t.el.style.backgroundPosition = `${ox - hc * st.px}px ${oy - hr * st.py}px`;
       shape(t); render(t);
     });
     if (!first) requestAnimationFrame(() => requestAnimationFrame(() => st && st.board.classList.remove('nofx')));
@@ -609,7 +618,7 @@ GAMES.puzzle = (() => {
   // позиция (только transform — дёшево и плавно)
   function render(t, dx = 0, dy = 0) {
     const [c, r] = cr(t.pos);
-    t.el.style.transform = `translate3d(${c * st.px + dx}px,${r * st.py + dy}px,0)`;
+    t.el.style.transform = `translate3d(${c * st.px + dx}px,${r * st.py + dy}px,0) rotate(${t.rot * 90}deg)`;
   }
   // форма: склеенные стороны без щели и без скруглений (+1px нахлёст против швов)
   function shape(t) {
@@ -624,14 +633,16 @@ GAMES.puzzle = (() => {
     const T = st.tiles, parent = T.map((_, i) => i);
     const find = i => parent[i] === i ? i : (parent[i] = find(parent[i]));
     T.forEach(t => t.conn = {});
+    const up = t => t.rot % 4 === 0;
     for (const t of T) {
+      if (!up(t)) continue;
       const [hc, hr] = cr(t.home), [pc, pr] = cr(t.pos);
-      if (hc < st.cols - 1) { const u = T[t.home + 1]; if (pc < st.cols - 1 && u.pos === t.pos + 1) { t.conn.r = u.conn.l = true; parent[find(t.home)] = find(u.home); } }
-      if (hr < st.rows - 1) { const u = T[t.home + st.cols]; if (pr < st.rows - 1 && u.pos === t.pos + st.cols) { t.conn.b = u.conn.t = true; parent[find(t.home)] = find(u.home); } }
+      if (hc < st.cols - 1) { const u = T[t.home + 1]; if (up(u) && pc < st.cols - 1 && u.pos === t.pos + 1) { t.conn.r = u.conn.l = true; parent[find(t.home)] = find(u.home); } }
+      if (hr < st.rows - 1) { const u = T[t.home + st.cols]; if (up(u) && pr < st.rows - 1 && u.pos === t.pos + st.cols) { t.conn.b = u.conn.t = true; parent[find(t.home)] = find(u.home); } }
     }
     const groups = new Map();
     T.forEach(t => { const r = find(t.home); if (!groups.has(r)) groups.set(r, []); groups.get(r).push(t); });
-    groups.forEach(list => { const g = { list, locked: list[0].pos === list[0].home }; list.forEach(t => t.g = g); });
+    groups.forEach(list => { const g = { list, locked: list[0].pos === list[0].home && up(list[0]) }; list.forEach(t => t.g = g); });
     T.forEach(t => t.el.classList.toggle('ok', t.g.locked));
   }
   const links = () => st.tiles.reduce((s, t) => s + (t.conn.r ? 1 : 0) + (t.conn.b ? 1 : 0), 0);
@@ -668,6 +679,12 @@ GAMES.puzzle = (() => {
   }
   function clearSel() { if (st.sel) { st.sel.g.list.forEach(m => m.el.classList.remove('sel')); st.sel = null; } }
   function tap(t) {
+    if (st.rotOn) { // режим поворота: тап крутит одиночный кусок
+      if (t.g.list.length > 1) { t.g.list.forEach(m => replay(m.el, 'nope')); toast('Склейка уже повёрнута правильно 👌'); return; }
+      const before = links(), prevConn = new Map(st.tiles.map(x => [x, { ...x.conn }]));
+      t.rot++; render(t); st.moves++; stats(); buzz(6);
+      settle(before, prevConn); return;
+    }
     if (!st.sel) { st.sel = t; t.g.list.forEach(m => m.el.classList.add('sel')); buzz(5); return; }
     const a = st.sel; clearSel();
     if (a.g === t.g) return;
@@ -695,14 +712,19 @@ GAMES.puzzle = (() => {
     const before = links(), prevConn = new Map(st.tiles.map(x => [x, { ...x.conn }]));
     target.forEach((cell, m) => { m.pos = cell; m.el.style.zIndex = 4; });
     displaced.forEach(([o, y]) => { o.pos = y; o.el.style.zIndex = 3; });
+    setTimeout(() => [...target.keys(), ...displaced.map(d => d[0])].forEach(x => x.el.style.zIndex = ''), 400);
+    st.moves++; stats(); buzz(8);
+    settle(before, prevConn);
+    return true;
+  }
+  // после любого хода: пересчёт склеек, анимация, сохранение, проверка победы
+  function settle(before, prevConn) {
     recompute(); st.tiles.forEach(x => render(x));
     clearTimeout(st.shapeT);
     st.shapeT = setTimeout(() => st && st.tiles.forEach(x => { // склейку рисуем, когда куски доехали
       const v = x.vconn || {}, k = x.conn;
       if (v.r !== k.r || v.b !== k.b || v.l !== k.l || v.t !== k.t) { x.vconn = { ...k }; shape(x); }
     }), 300);
-    setTimeout(() => [...target.keys(), ...displaced.map(d => d[0])].forEach(x => x.el.style.zIndex = ''), 400);
-    st.moves++; stats(); buzz(8);
     if (links() > before) { // новая склейка
       const fresh = st.tiles.filter(x => { const p = prevConn.get(x); return (x.conn.r && !p.r) || (x.conn.b && !p.b) || (x.conn.l && !p.l) || (x.conn.t && !p.t); });
       setTimeout(() => {
@@ -712,8 +734,7 @@ GAMES.puzzle = (() => {
       }, 260);
     }
     save();
-    if (st.tiles.every(x => x.pos === x.home)) setTimeout(win, 380);
-    return true;
+    if (st.tiles.every(x => x.pos === x.home && x.rot % 4 === 0)) setTimeout(win, 380);
   }
   function win() {
     st.tiles.forEach(x => { x.vconn = { ...x.conn }; shape(x); });
@@ -735,6 +756,93 @@ GAMES.puzzle = (() => {
     URL.revokeObjectURL(st.url); st = null;
   }
   return { title: 'Пазлы', open(r) { root = r; showList(); }, close: stop };
+})();
+
+/* ---------- 🃏 мемори ---------- */
+GAMES.memory = (() => {
+  let root, st = null, photos = null;
+  const EMO = ['💗', '🌙', '⭐', '🌸', '🍓', '🎀', '🦋', '🌈', '🍒', '🧸'];
+  const LEVELS = [[6, 3], [8, 4], [10, 4]]; // пар, столбцов
+  const WORD = ['ход', 'хода', 'ходов'];
+
+  function stop() { if (st) { clearInterval(st.timer); st.ro && st.ro.disconnect(); } st = null; }
+  async function getPhotos() {
+    if (photos) return photos;
+    try { photos = (await db('memories?select=preview&order=id.desc&limit=30')).map(r => r.preview).filter(Boolean); }
+    catch (e) { console.error(e); photos = []; }
+    return photos;
+  }
+  function menu() {
+    stop(); $('#layerTitle').textContent = 'Мемори';
+    const best = store.get('memBest') || {};
+    root.innerHTML = `<div class="mm-menu"><p class="mm-lead">Найди пары наших фото. Чем меньше ходов, тем лучше</p>
+      ${LEVELS.map(([p], i) => `<button class="mm-level" data-i="${i}" style="animation-delay:${i * 80}ms"><b>${p} пар</b><small>${best[p] ? `рекорд: ${best[p].moves} ${plural(best[p].moves, WORD)}, ${fmtT(best[p].secs)}` : 'ещё не играла'}</small></button>`).join('')}</div>`;
+    $$('.mm-level', root).forEach(b => b.onclick = () => { buzz(); start(LEVELS[+b.dataset.i]); });
+  }
+  async function start([pairs, cols]) {
+    stop(); root.innerHTML = '<p class="err">Раскладываю…</p>';
+    const ph = [...await getPhotos()].sort(() => Math.random() - .5);
+    const faces = [...Array(pairs)].map((_, i) => i < ph.length ? { img: ph[i] } : { emo: EMO[i % EMO.length] });
+    const deck = [...faces, ...faces].map((f, i) => ({ ...f, k: i % pairs })).sort(() => Math.random() - .5);
+    st = { pairs, cols, deck, open: [], found: 0, moves: 0, secs: 0, lock: false, timer: 0 };
+    root.innerHTML = `<div class="pz-bar"><span class="pz-stat" id="mmTime">0:00</span><span class="pz-stat" id="mmMoves">0 ходов</span><span class="pz-stat" id="mmLeft">0/${pairs}</span></div>
+      <div class="mm-stage" id="mmStage"><div class="mm-grid" id="mmGrid" style="--cols:${cols}"></div></div>
+      <div class="pz-foot" id="mmFoot"><button class="link" id="mmBack">← Уровни</button></div>`;
+    $('#mmBack').onclick = menu;
+    const grid = $('#mmGrid');
+    deck.forEach((c, i) => {
+      const b = document.createElement('button'); b.className = 'mm-card'; b.style.animationDelay = i * 35 + 'ms';
+      b.innerHTML = '<div class="mm-in"><div class="mm-back"></div><div class="mm-front"></div></div>';
+      const f = $('.mm-front', b);
+      if (c.img) f.style.backgroundImage = `url("${c.img}")`; else { f.textContent = c.emo; f.classList.add('emo'); }
+      c.el = b; b.onclick = () => flip(c); grid.append(b);
+    });
+    fit(); st.ro = new ResizeObserver(fit); st.ro.observe($('#mmStage'));
+  }
+  function fit() {
+    const stage = $('#mmStage'); if (!stage || !st) return;
+    const rows = Math.ceil(st.deck.length / st.cols), gap = 10;
+    const s = Math.floor(Math.min((stage.clientWidth - gap * (st.cols - 1)) / st.cols, (stage.clientHeight - gap * (rows - 1)) / rows));
+    $('#mmGrid').style.setProperty('--s', s + 'px');
+  }
+  function stats() {
+    $('#mmTime').textContent = fmtT(st.secs);
+    $('#mmMoves').textContent = `${st.moves} ${plural(st.moves, WORD)}`;
+    $('#mmLeft').textContent = `${st.found}/${st.pairs}`;
+  }
+  function flip(c) {
+    if (!st || st.lock || c.done || st.open.includes(c)) return;
+    if (!st.timer) st.timer = setInterval(() => { if (st && !document.hidden) { st.secs++; stats(); } }, 1000);
+    c.el.classList.add('up'); buzz(6); st.open.push(c);
+    if (st.open.length < 2) return;
+    st.moves++; stats(); st.lock = true;
+    const [a, b] = st.open;
+    if (a.k === b.k) setTimeout(() => {
+      [a, b].forEach(x => { x.done = true; x.el.classList.add('match'); });
+      fx.at(b.el, ['💖', '✨', '💗'], 16, .7); buzz(20);
+      st.found++; stats(); st.open = []; st.lock = false;
+      if (st.found === st.pairs) setTimeout(win, 450);
+    }, 450);
+    else setTimeout(() => {
+      [a, b].forEach(x => { x.el.classList.remove('up'); replay(x.el, 'wiggle'); });
+      st.open = []; st.lock = false;
+    }, 950);
+  }
+  function win() {
+    clearInterval(st.timer);
+    const best = store.get('memBest') || {}, prev = best[st.pairs];
+    const rec = !prev || st.moves < prev.moves || (st.moves === prev.moves && st.secs < prev.secs);
+    if (rec) { best[st.pairs] = { moves: st.moves, secs: st.secs }; store.set('memBest', best); }
+    navigator.vibrate && navigator.vibrate([40, 60, 80]);
+    const r = $('#mmGrid').getBoundingClientRect();
+    [0, 1, 2].forEach(i => setTimeout(() => fx.burst(r.left + r.width * (.2 + .3 * i), r.top + r.height * .4, ['💖', '✨', '🎉', '💗'], 34, 1.2), i * 200));
+    const w = document.createElement('div'); w.className = 'pz-win';
+    w.innerHTML = `<b>${rec && prev ? 'Новый рекорд! 🏆' : 'Все пары! 🎉'}</b><span>${fmtT(st.secs)}, ${st.moves} ${plural(st.moves, WORD)}</span>`;
+    const again = document.createElement('button'); again.className = 'btn btn-sm'; again.textContent = 'Ещё раз';
+    const lvl = [st.pairs, st.cols]; again.onclick = () => start(lvl);
+    w.append(again); $('#mmFoot').prepend(w);
+  }
+  return { title: 'Мемори', open(r) { root = r; menu(); }, close: stop };
 })();
 
 /* ---------- 🎨 рисуем вдвоём ---------- */
@@ -860,9 +968,11 @@ const T = {
 };
 T.puzzles = { name: 'Пазлы', one: 'пазл',
   fields: [['image', 'Фото для пазла', 'image'], ['cols', 'Сложность', 'select'],
+           ['rotate', '🔄 Кусочки повёрнуты (тап — поворот)', 'check'],
+           ['opens_at', 'Открыть не раньше (необязательно)', 'date', 1],
            ['hint', 'Загадка на карточке (необязательно)', 'text', 1], ['message', 'Что она увидит, когда соберёт (необязательно)', 'area', 1]],
   label: r => r.hint || 'Без загадки',
-  meta: r => `${DIFF[r.cols] || r.cols}, ` + (r.solved_at ? `✓ собрала за ${fmtT(r.best_time || 0)}` : 'ещё не собрала') };
+  meta: r => `${DIFF[r.cols] || r.cols}${r.rotate ? ' 🔄' : ''}, ` + (r.opens_at && r.opens_at > dateIn(Date.now()) ? `🔒 до ${fmtDate(r.opens_at)}, ` : '') + (r.solved_at ? `✓ собрала за ${fmtT(r.best_time || 0)}` : 'ещё не собрала') };
 T.questions = { name: 'Вопросы', one: 'вопрос',
   fields: [['question', 'Вопрос', 'text'], ['kind', 'Как она отвечает', 'select'],
            ['answers', 'Правильные ответы: каждый вариант с новой строки. Для даты: 12.05.2023 (или 12.05, если год не важен)', 'area'],
@@ -917,13 +1027,13 @@ function openSheet(row) {
     : type === 'color'
     ? `<div class="field"><span>${l}</span><div class="pal-row"><div class="env env-mini c0" id="envPrev"><div class="env-box"><div class="env-back"></div><div class="env-paper"></div><div class="env-front"></div><div class="env-flap"></div><div class="env-seal">❤</div></div></div><div class="swatches" id="swatches"></div></div><div class="pal-actions"><button type="button" class="chip" id="palGen">🎲 Другие цвета</button><label class="chip">🎨 Свой<input type="color" name="${k}"></label></div></div>`
     : `<label class="field"><span>${l}</span>${type === 'area' ? `<textarea name="${k}" rows="${k === 'body' ? 9 : 3}"></textarea>` : `<input name="${k}" type="${type}">`}</label>`).join('');
-  t.fields.forEach(([k, , type]) => {
+  t.fields.forEach(([k, , type, opt]) => {
     const el = $(`[name="${k}"]`, sheet);
     if (type === 'check') el.checked = row ? !!row[k] : k === 'approved';
     else if (type === 'color') initPalette(el, row && row[k]);
     else if (type === 'image') initImagePick(row);
     else if (type === 'select') el.value = row ? row[k] : k === 'cols' ? '4' : SELECTS[k][0][0];
-    else el.value = row ? (row[k] ?? '') : type === 'date' ? defaultDate(k) : '';
+    else el.value = row ? (row[k] ?? '') : type === 'date' && !opt ? defaultDate(k) : '';
   });
   const del = $('#sheetDel'); del.hidden = !row; del.classList.remove('arm'); del.textContent = 'Удалить';
   sheet.showModal();
