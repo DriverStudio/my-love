@@ -159,7 +159,44 @@ $('#app').addEventListener('touchend', e => {
     go(0, x, y);
     setTimeout(() => $('#nav').classList.add('on'), 700);
   }
-  $('#asHer').onclick = e => enter(e.currentTarget, ['❤️', '💖', '💗', '✨']);
+  /* --- вопрос на входе для неё --- */
+  let quizQ = null, wrong = 0;
+  const NOPE = ['Хм, не то 🤔', 'Точно? Подумай ещё', 'Неа 😏', 'Почти… или нет 🙈'];
+  async function ask(btn) {
+    btn.disabled = true;
+    try {
+      quizQ = await rpc('get_question', {});
+      if (!quizQ) return enter(btn, ['❤️', '💖', '💗', '✨']); // вопросов нет — пускаем сразу
+      wrong = 0;
+      $('#quizQ').textContent = quizQ.question;
+      const a = $('#quizA'); a.value = '';
+      a.type = quizQ.kind === 'date' ? 'date' : 'text';
+      $('#quizHint').hidden = true; $('#quizOther').hidden = true;
+      $('#who').hidden = true; $('#login').hidden = true; $('#quiz').hidden = false; $('#intro').classList.add('asking');
+      replay($('#quiz'), 'pop-in');
+      if (a.type === 'text') setTimeout(() => a.focus(), 300);
+    } catch (e) { console.error(e); enter(btn, ['❤️', '💖', '💗', '✨']); } // нет связи — не мучаем
+    finally { btn.disabled = false; }
+  }
+  async function answer() {
+    const a = $('#quizA'), btn = $('#quizBtn');
+    if (!a.value.trim()) { replay(a, 'shake'); return; }
+    btn.disabled = true;
+    try {
+      const r = await rpc('check_answer', { qid: quizQ.id, a: a.value });
+      if (r && r.ok) { toast('Это точно ты 💗'); $('#quiz').hidden = true; return enter(btn, ['💗', '💖', '✨', '🔓']); }
+      wrong++; replay(a, 'shake'); buzz(60);
+      toast(NOPE[Math.floor(Math.random() * NOPE.length)]);
+      if (r && r.hint) { $('#quizHint').textContent = 'Подсказка: ' + r.hint; $('#quizHint').hidden = false; }
+      if (wrong >= 2) $('#quizOther').hidden = false;
+    } catch (e) { console.error(e); toast('Нет связи, попробуй ещё раз'); }
+    finally { btn.disabled = false; }
+  }
+  $('#asHer').onclick = e => ask(e.currentTarget);
+  $('#quizBtn').onclick = answer;
+  $('#quizA').onkeydown = e => { if (e.key === 'Enter') answer(); };
+  $('#quizOther').onclick = () => ask($('#quizOther'));
+  $('#quizBack').onclick = () => { $('#quiz').hidden = true; $('#who').hidden = false; $('#intro').classList.remove('asking'); };
   $('#asHim').onclick = async e => {
     const btn = e.currentTarget;
     if (adminPass) {
@@ -812,8 +849,17 @@ T.puzzles = { name: 'Пазлы', one: 'пазл',
            ['hint', 'Загадка на карточке (необязательно)', 'text', 1], ['message', 'Что она увидит, когда соберёт (необязательно)', 'area', 1]],
   label: r => r.hint || 'Без загадки',
   meta: r => `${DIFF[r.cols] || r.cols}, ` + (r.solved_at ? `✓ собрала за ${fmtT(r.best_time || 0)}` : 'ещё не собрала') };
-const SELECTS = { cols: Object.entries(DIFF).map(([v, n]) => [v, `${n}, ${v}×${v}`]) };
-const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans(), puzzles: () => {} };
+T.questions = { name: 'Вопросы', one: 'вопрос',
+  fields: [['question', 'Вопрос', 'text'], ['kind', 'Как она отвечает', 'select'],
+           ['answers', 'Правильные ответы: каждый вариант с новой строки. Для даты: 12.05.2023 (или 12.05, если год не важен)', 'area'],
+           ['hint', 'Подсказка после ошибки (необязательно)', 'text', 1]],
+  label: r => r.question,
+  meta: r => `${r.kind === 'date' ? '📅 дата' : '✍️ словами'}, спрашивал ${r.asked_count || 0} ${plural(r.asked_count || 0, ['раз', 'раза', 'раз'])}` + (r.wrong_streak ? `, ошибок подряд: ${r.wrong_streak}` : '') };
+const SELECTS = {
+  cols: Object.entries(DIFF).map(([v, n]) => [v, `${n}, ${v}×${v}`]),
+  kind: [['text', '✍️ Словами'], ['date', '📅 Выбирает дату']],
+};
+const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans(), puzzles: () => {}, questions: () => {} };
 let admTab = 'notes', admRows = [], editing = null;
 const sheet = $('#sheet');
 
@@ -859,7 +905,7 @@ function openSheet(row) {
     if (type === 'check') el.checked = row ? !!row[k] : k === 'approved';
     else if (type === 'color') initPalette(el, row && row[k]);
     else if (type === 'image') initImagePick(row);
-    else if (type === 'select') el.value = row ? row[k] : '4';
+    else if (type === 'select') el.value = row ? row[k] : k === 'cols' ? '4' : SELECTS[k][0][0];
     else el.value = row ? (row[k] ?? '') : type === 'date' ? defaultDate(k) : '';
   });
   const del = $('#sheetDel'); del.hidden = !row; del.classList.remove('arm'); del.textContent = 'Удалить';

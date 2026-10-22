@@ -51,6 +51,17 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 .btn-ghost { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.35); box-shadow: none; }
 .btn-ghost::after { display: none; }
 .login { display: flex; flex-direction: column; gap: 12px; width: min(100%, 300px); }
+.intro.asking .intro-sub { display: none; }
+.intro.asking .intro-heart { width: 84px; }
+.intro-heart { transition: width .4s var(--ease); }
+.quiz { display: flex; flex-direction: column; gap: 12px; width: min(100%, 320px); }
+.quiz-kicker { font: 700 1.3rem Caveat, cursive; color: #F3C6E8; }
+.quiz-q { font: 800 1.15rem/1.35 Unbounded, sans-serif; }
+.quiz input { width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.3);
+  background: rgba(255,255,255,.1); color: #fff; font: 600 16px Manrope, sans-serif; outline: none; text-align: center; color-scheme: dark; }
+.quiz input:focus { border-color: var(--lilac); }
+.quiz-hint { font: 700 1.3rem/1.2 Caveat, cursive; color: var(--butter); animation: pop .4s var(--spring); }
+.quiz-links { display: flex; justify-content: center; gap: 14px; }
 .link { color: inherit; opacity: .75; font-weight: 700; text-decoration: underline; padding: 8px; }
 @keyframes fade-in { to { opacity: 1; } }
 
