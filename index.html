@@ -21,7 +21,15 @@
   </svg>
   <h1 class="intro-title" id="introTitle"></h1>
   <p class="intro-sub">Тут всё про нас и про то, сколько осталось</p>
-  <button id="enter" class="btn">Открыть</button>
+  <div class="who" id="who">
+    <button class="btn" id="asHer">Я она 💗</button>
+    <button class="btn btn-ghost" id="asHim">Я он 🪖</button>
+  </div>
+  <div class="login" id="login" hidden>
+    <input id="pass" type="password" placeholder="Пароль" autocomplete="current-password">
+    <button class="btn" id="loginBtn">Войти</button>
+    <button class="link" id="loginBack">Назад</button>
+  </div>
 </div>
 
 <main id="app">
@@ -130,6 +138,19 @@
       <button class="game" data-a><i>🪖</i><span><b>Солдатик</b><small>Позаботься обо мне до дембеля</small></span></button>
     </div>
   </section>
+
+  <!-- 8. ПУЛЬТ (только он) -->
+  <section class="screen s-admin" data-name="admin">
+    <div class="bg"><i></i><i></i><i></i></div>
+    <div class="content">
+      <h2 data-a>Пульт</h2>
+      <p class="sub" data-a>Меняешь тут, она видит сразу</p>
+      <div class="tabs" id="admTabs" data-a></div>
+      <button class="btn add" id="admAdd" data-a>+ Добавить</button>
+      <div class="adm-list" id="admList"></div>
+      <button class="link logout" id="logout">Выйти</button>
+    </div>
+  </section>
 </main>
 
 <nav id="nav" class="nav">
@@ -141,6 +162,7 @@
   <button aria-label="Когда вернусь">🌴</button>
   <button aria-label="Настроение">🌈</button>
   <button aria-label="Игры">🎮</button>
+  <button aria-label="Пульт" id="navAdmin" hidden>⚙️</button>
 </nav>
 
 <dialog id="dlg">
@@ -149,6 +171,16 @@
     <p id="dlgBody"></p>
     <button id="dlgClose" class="btn btn-sm">Закрыть</button>
   </article>
+</dialog>
+
+<dialog id="sheet" class="sheet">
+  <button class="x" id="sheetX" aria-label="Закрыть">✕</button>
+  <h3 id="sheetTitle"></h3>
+  <div id="sheetFields"></div>
+  <div class="sheet-actions">
+    <button class="del" id="sheetDel">Удалить</button>
+    <button class="btn btn-sm" id="sheetSave">Сохранить</button>
+  </div>
 </dialog>
 
 <div id="toast" role="status"></div>

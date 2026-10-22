@@ -8,6 +8,15 @@ const START = new Date(C.START), END = new Date(C.END);
 /* ================= helpers ================= */
 const H = { apikey: C.SUPABASE_KEY, 'Content-Type': 'application/json' };
 if (C.SUPABASE_KEY.startsWith('eyJ')) H.Authorization = 'Bearer ' + C.SUPABASE_KEY;
+/* ---- вход для него: пароль хранится в БД (хэш), проверяет Supabase ---- */
+const store = {
+  get: k => { try { return JSON.parse(localStorage.getItem(k)); } catch (e) { return null; } },
+  set: (k, v) => { try { v == null ? localStorage.removeItem(k) : localStorage.setItem(k, JSON.stringify(v)); } catch (e) {} },
+};
+let isAdmin = false, adminPass = store.get('adm');
+const rpc = (fn, args) => db('rpc/' + fn, { method: 'POST', body: JSON.stringify(args) });
+const checkPass = async p => (await rpc('check_pass', { p })) === true;
+
 async function db(path, opts = {}) {
   const r = await fetch(`${C.SUPABASE_URL}/rest/v1/${path}`, { ...opts, headers: { ...H, ...opts.headers } });
   if (!r.ok) throw new Error(r.status + ' ' + await r.text());
@@ -102,7 +111,7 @@ const stagger = root => $$('[data-a]', root).forEach((el, i) => el.style.setProp
 screens.forEach(stagger);
 
 function go(i, ox = innerWidth / 2, oy = innerHeight / 2) {
-  if (i === cur || busy || i < 0 || i >= screens.length) return;
+  if (i === cur || busy || i < 0 || i >= screens.length - (isAdmin ? 0 : 1)) return;
   busy = true; buzz(8);
   const to = screens[i], from = screens[cur];
   to.style.setProperty('--x', ox + 'px'); to.style.setProperty('--y', oy + 'px');
@@ -140,13 +149,38 @@ $('#app').addEventListener('touchend', e => {
     for (const ch of word) { const s = document.createElement('span'); s.className = 'ch'; s.textContent = ch; s.style.setProperty('--i', i++); w.append(s); }
     el.append(w, ' ');
   });
-  $('#enter').onclick = e => {
-    const r = e.currentTarget.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
-    fx.burst(x, y, ['❤️', '💖', '💗', '✨'], 60, 1.4); buzz(30);
+  function enter(btn, chars) {
+    const r = btn.getBoundingClientRect(), x = r.left + r.width / 2, y = r.top + r.height / 2;
+    fx.burst(x, y, chars, 60, 1.4); buzz(30);
+    if (isAdmin) { $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 8); initAdmin(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
     go(0, x, y);
     setTimeout(() => $('#nav').classList.add('on'), 700);
+  }
+  $('#asHer').onclick = e => enter(e.currentTarget, ['❤️', '💖', '💗', '✨']);
+  $('#asHim').onclick = async e => {
+    const btn = e.currentTarget;
+    if (adminPass) {
+      try { if (await checkPass(adminPass)) { isAdmin = true; return enter(btn, ['🪖', '⭐', '✨', '💪']); } }
+      catch (err) { console.error(err); }
+      adminPass = null; store.set('adm', null);
+    }
+    $('#who').hidden = true; $('#login').hidden = false; $('#pass').focus();
   };
+  $('#loginBack').onclick = () => { $('#login').hidden = true; $('#who').hidden = false; };
+  async function doLogin() {
+    const btn = $('#loginBtn'), pass = $('#pass');
+    if (!pass.value) { replay(pass, 'shake'); return; }
+    btn.disabled = true;
+    try {
+      if (!(await checkPass(pass.value))) throw new Error('bad password');
+      adminPass = pass.value; store.set('adm', adminPass); isAdmin = true; pass.value = '';
+      enter(btn, ['🪖', '⭐', '✨', '💪']);
+    } catch (err) { console.error(err); replay(pass, 'shake'); buzz(60); toast(/bad password/.test(err.message) ? 'Неверный пароль' : 'Нет связи, попробуй ещё раз'); }
+    finally { btn.disabled = false; }
+  }
+  $('#loginBtn').onclick = doLogin;
+  $('#pass').onkeydown = e => { if (e.key === 'Enter') doLogin(); };
 })();
 
 /* ================= 1. счётчик ================= */
@@ -230,7 +264,7 @@ async function loadLetters() {
     if (!all.length) { box.innerHTML = '<p class="err">Писем пока нет</p>'; return; }
     box.innerHTML = '';
     all.forEach((l, n) => {
-      const isOpen = l.id in body, openDate = new Date(l.open_at + 'T00:00:00');
+      const openDate = new Date(l.open_at + 'T00:00:00'), isOpen = l.id in body && openDate <= Date.now();
       const left = Math.max(1, Math.ceil((openDate - Date.now()) / DAY));
       const b = document.createElement('button');
       b.className = `env c${n % 4}` + (isOpen ? '' : ' locked'); b.dataset.a = '';
@@ -294,6 +328,7 @@ async function loadPlans() {
       const set = v => { p.liked = v; h.setAttribute('aria-pressed', v); plansSub(); };
       set(p.liked);
       h.onclick = async () => {
+        if (isAdmin) { toast('Сердечки ставит она 🙂'); return; }
         set(!p.liked); buzz();
         if (p.liked) fx.at(h, ['❤️', '💖'], 14, .8);
         try { await db(`plans?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ liked: p.liked }) }); }
@@ -318,6 +353,7 @@ async function loadMood() {
   wrap.innerHTML = Object.entries(MOODS).map(([k, [e, t]]) => `<button class="mood" data-k="${k}"><i>${e}</i>${t}</button>`).join('');
   wrap.onclick = async ev => {
     const b = ev.target.closest('button'); if (!b) return;
+    if (isAdmin) { toast('Это её кнопки 🙂'); return; }
     const k = b.dataset.k, prev = map[today];
     replay(b, 'jelly'); fx.at(b, [MOODS[k][0], '✨'], 22); buzz(15);
     map[today] = k; paint();
@@ -333,6 +369,95 @@ async function loadMood() {
 
 /* ================= 7. игры ================= */
 $$('.game').forEach(g => g.onclick = () => { replay($('i', g), 'wiggle'); fx.at(g, ['✨', '🎮'], 12); toast('Скоро открою 😉'); });
+
+/* ================= 8. пульт ================= */
+const fmtDate = d => new Date(d + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long', year: 'numeric' });
+const T = {
+  notes: { name: 'Записки', one: 'записку', order: 'created_at.desc',
+    fields: [['text', 'Текст записки', 'area']],
+    label: r => r.text, meta: r => new Date(r.created_at).toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' }) },
+  letters: { name: 'Письма', one: 'письмо', order: 'open_at',
+    fields: [['title', 'Заголовок на конверте', 'text'], ['open_at', 'Когда можно открыть', 'date'], ['body', 'Текст письма', 'area']],
+    label: r => r.title, meta: r => new Date(r.open_at + 'T00:00:00') <= Date.now() ? 'Уже открыто' : 'Откроется ' + fmtDate(r.open_at) },
+  reasons: { name: 'Причины', one: 'причину', order: 'id',
+    fields: [['text', 'Почему я тебя люблю', 'area']], label: r => r.text, meta: () => '' },
+  plans: { name: 'Планы', one: 'план', order: 'id',
+    fields: [['text', 'Что сделаем', 'text'], ['done', 'Уже сделали', 'check']],
+    label: r => r.text, meta: r => [r.done ? '✓ сделали' : '', r.liked ? '❤ она хочет' : ''].filter(Boolean).join(', ') },
+};
+const RELOAD = { notes: () => { typed = false; return loadNote(); }, letters: () => loadLetters(), reasons: () => loadJar(), plans: () => loadPlans() };
+let admTab = 'notes', admRows = [], editing = null;
+const sheet = $('#sheet');
+
+function initAdmin() { renderTabs(); loadAdm(); }
+function renderTabs() {
+  $('#admTabs').innerHTML = Object.entries(T).map(([k, t]) => `<button data-k="${k}" aria-pressed="${k === admTab}">${t.name}</button>`).join('');
+}
+$('#admTabs').onclick = e => { const b = e.target.closest('button'); if (!b || b.dataset.k === admTab) return; admTab = b.dataset.k; renderTabs(); loadAdm(); buzz(); };
+async function loadAdm() {
+  const list = $('#admList'); list.innerHTML = '<p class="err">Загружаю…</p>';
+  try { admRows = (await rpc('admin_list', { p: adminPass, tbl: admTab })) || []; renderAdm(); }
+  catch (e) { console.error(e); fail(list); }
+}
+function renderAdm() {
+  const t = T[admTab], list = $('#admList');
+  if (!admRows.length) { list.innerHTML = '<p class="err">Пусто. Нажми «Добавить»</p>'; return; }
+  list.innerHTML = '';
+  admRows.forEach((r, i) => {
+    const b = document.createElement('button'); b.className = 'adm-item'; b.style.animationDelay = i * 40 + 'ms';
+    b.innerHTML = '<b></b><small></small>';
+    $('b', b).textContent = t.label(r); $('small', b).textContent = t.meta(r);
+    b.onclick = () => openSheet(r);
+    list.append(b);
+  });
+}
+function openSheet(row) {
+  editing = row; const t = T[admTab];
+  $('#sheetTitle').textContent = row ? 'Изменить ' + t.one : 'Добавить ' + t.one;
+  $('#sheetFields').innerHTML = t.fields.map(([k, l, type]) => type === 'check'
+    ? `<label class="chk"><input type="checkbox" name="${k}"><span>${l}</span></label>`
+    : `<label class="field"><span>${l}</span>${type === 'area' ? `<textarea name="${k}" rows="${k === 'body' ? 9 : 3}"></textarea>` : `<input name="${k}" type="${type}">`}</label>`).join('');
+  t.fields.forEach(([k, , type]) => {
+    const el = $(`[name="${k}"]`, sheet);
+    if (type === 'check') el.checked = !!(row && row[k]);
+    else el.value = row ? (row[k] ?? '') : type === 'date' ? dateIn(Date.now()) : '';
+  });
+  const del = $('#sheetDel'); del.hidden = !row; del.classList.remove('arm'); del.textContent = 'Удалить';
+  sheet.showModal();
+}
+$('#admAdd').onclick = () => openSheet(null);
+$('#sheetX').onclick = () => sheet.close();
+
+const errMsg = e => /bad password/.test(e.message) ? 'Пароль сменился. Нажми «Выйти» и войди заново' : 'Не получилось, проверь интернет';
+async function afterChange(msg) {
+  sheet.close(); toast(msg); fx.burst(innerWidth / 2, innerHeight / 2, ['✨', '💖', '⭐'], 24);
+  await loadAdm(); RELOAD[admTab]();
+}
+$('#sheetSave').onclick = async () => {
+  const t = T[admTab], data = {};
+  for (const [k, l, type] of t.fields) {
+    const el = $(`[name="${k}"]`, sheet);
+    data[k] = type === 'check' ? el.checked : el.value.trim();
+    if (type !== 'check' && !data[k]) { toast(`Заполни «${l}»`); replay(el, 'shake'); el.focus(); return; }
+  }
+  const btn = $('#sheetSave'); btn.disabled = true;
+  try {
+    await rpc('admin_save', { p: adminPass, tbl: admTab, row_id: editing ? editing.id : null, d: data });
+    await afterChange(editing ? 'Сохранено' : 'Добавлено');
+  } catch (e) { console.error(e); toast(errMsg(e)); }
+  finally { btn.disabled = false; }
+};
+$('#sheetDel').onclick = async () => {
+  const del = $('#sheetDel');
+  if (!del.classList.contains('arm')) { // защита от случайного тапа
+    del.classList.add('arm'); del.textContent = 'Точно удалить?'; buzz(20);
+    clearTimeout(del.t); del.t = setTimeout(() => { del.classList.remove('arm'); del.textContent = 'Удалить'; }, 3000);
+    return;
+  }
+  try { await rpc('admin_delete', { p: adminPass, tbl: admTab, row_id: editing.id }); await afterChange('Удалено'); }
+  catch (e) { console.error(e); toast(errMsg(e)); }
+};
+$('#logout').onclick = () => { store.set('adm', null); location.reload(); };
 
 /* ================= старт ================= */
 loadNote(); loadLetters(); loadJar(); loadPlans(); loadMood();

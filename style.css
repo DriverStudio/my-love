@@ -4,6 +4,7 @@
   --ease: cubic-bezier(.2,.8,.2,1); --spring: cubic-bezier(.3,1.5,.5,1);
 }
 * { box-sizing: border-box; margin: 0; padding: 0; }
+[hidden] { display: none !important; }
 html, body { height: 100%; overflow: hidden; background: var(--plum); }
 body {
   font: 500 16px/1.5 Manrope, system-ui, sans-serif; color: #fff;
@@ -46,7 +47,11 @@ button { font: inherit; color: inherit; background: none; border: 0; cursor: poi
 }
 @keyframes ch { to { opacity: 1; transform: none; } }
 .intro-sub { font: 700 1.5rem/1.2 Caveat, cursive; color: #F3C6E8; opacity: 0; animation: fade-in .8s 1.6s forwards; }
-.intro .btn { opacity: 0; animation: fade-in .8s 2s forwards; }
+.who { display: flex; flex-wrap: wrap; justify-content: center; gap: 12px; opacity: 0; animation: fade-in .8s 2s forwards; }
+.btn-ghost { background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.35); box-shadow: none; }
+.btn-ghost::after { display: none; }
+.login { display: flex; flex-direction: column; gap: 12px; width: min(100%, 300px); }
+.link { color: inherit; opacity: .75; font-weight: 700; text-decoration: underline; padding: 8px; }
 @keyframes fade-in { to { opacity: 1; } }
 
 /* ---------- экраны ---------- */
@@ -264,7 +269,7 @@ dialog[open] .letter { animation: unfold .7s var(--spring); }
 /* ---------- навигация ---------- */
 .nav {
   position: fixed; z-index: 30; left: 50%; bottom: calc(env(safe-area-inset-bottom, 0px) + 14px); translate: -50% 0;
-  width: min(94vw, 440px); display: grid; grid-template-columns: repeat(7, 1fr); padding: 6px; border-radius: 999px;
+  width: min(94vw, 440px); display: grid; grid-template-columns: repeat(var(--n, 7), 1fr); padding: 6px; border-radius: 999px;
   background: rgba(30,8,40,.5); -webkit-backdrop-filter: blur(16px) saturate(1.6); backdrop-filter: blur(16px) saturate(1.6);
   border: 1px solid rgba(255,255,255,.25); box-shadow: 0 14px 34px -12px rgba(0,0,0,.6);
   opacity: 0; transform: translateY(60px); transition: opacity .6s, transform .8s var(--spring);
@@ -273,7 +278,7 @@ dialog[open] .letter { animation: unfold .7s var(--spring); }
 .nav button { position: relative; z-index: 1; height: 48px; font-size: 1.35rem; transition: transform .35s var(--spring); }
 .nav button[aria-current="true"] { transform: translateY(-2px) scale(1.18); }
 .nav-ind {
-  position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / 7); border-radius: 999px;
+  position: absolute; top: 6px; bottom: 6px; left: 6px; width: calc((100% - 12px) / var(--n, 7)); border-radius: 999px;
   background: linear-gradient(135deg, var(--berry), var(--peach)); box-shadow: 0 6px 16px -4px rgba(255,61,139,.8);
   transform: translateX(calc(var(--k, 0) * 100%)); transition: transform .55s var(--spring);
 }
@@ -286,7 +291,48 @@ dialog[open] .letter { animation: unfold .7s var(--spring); }
 #toast.show { opacity: 1; translate: -50% 0; }
 .err { opacity: .8; font-size: .95rem; }
 
+/* ---------- 8. пульт ---------- */
+.s-admin { --bg: #160A26; --fg: #fff; --fg2: #C7B4F0; --b1: #7B5CFF; --b2: #FF3D8B; --b3: #00C2FF; }
+.tabs { display: flex; gap: 8px; overflow-x: auto; margin: 0 -22px 16px; padding: 0 22px 4px; scrollbar-width: none; }
+.tabs::-webkit-scrollbar { display: none; }
+.tabs button { flex: none; padding: 10px 16px; border-radius: 999px; font-weight: 800; font-size: .9rem;
+  background: rgba(255,255,255,.1); border: 1px solid rgba(255,255,255,.2); transition: .25s; }
+.tabs button[aria-pressed="true"] { background: #fff; color: var(--ink); }
+.add { width: 100%; margin-bottom: 16px; }
+.adm-item { display: block; width: 100%; text-align: left; padding: 16px 18px; margin-bottom: 10px; border-radius: 18px;
+  background: rgba(255,255,255,.08); border: 1px solid rgba(255,255,255,.14); transition: transform .2s; animation: rise .5s var(--ease) both; }
+.adm-item:active { transform: scale(.98); }
+.adm-item b { display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; font-weight: 700; line-height: 1.35; }
+.adm-item small { display: block; color: var(--fg2); margin-top: 4px; font-size: .82rem; }
+.logout { display: block; margin: 24px auto 0; color: var(--fg2); }
+
+dialog.sheet {
+  position: fixed; inset: auto 0 0 0; margin: 0 auto; width: min(100%, 560px); max-width: none; max-height: 92dvh; overflow-y: auto;
+  border-radius: 26px 26px 0 0; background: #1F1033; color: #fff;
+  padding: 24px 20px calc(env(safe-area-inset-bottom, 0px) + 20px);
+}
+dialog.sheet[open] { animation: slideup .45s var(--ease); }
+@keyframes slideup { from { transform: translateY(100%); } }
+.sheet h3 { font: 800 1.15rem/1.3 Unbounded, sans-serif; margin-bottom: 18px; padding-right: 44px; }
+.x { position: absolute; top: 18px; right: 18px; width: 36px; height: 36px; border-radius: 50%; background: rgba(255,255,255,.1); }
+.field { display: block; margin-bottom: 14px; }
+.field span { display: block; font-size: .85rem; font-weight: 700; color: #C7B4F0; margin-bottom: 6px; }
+.field input, .field textarea, .login input {
+  width: 100%; padding: 14px 16px; border-radius: 14px; border: 1px solid rgba(255,255,255,.22);
+  background: rgba(255,255,255,.08); color: #fff; font: 500 16px/1.45 Manrope, sans-serif; outline: none; transition: border-color .2s;
+}
+.field input:focus, .field textarea:focus, .login input:focus { border-color: var(--lilac); }
+.field textarea { resize: vertical; }
+.field input[type="date"] { color-scheme: dark; }
+.chk { display: flex; gap: 10px; align-items: center; font-weight: 700; margin-bottom: 14px; }
+.chk input { width: 22px; height: 22px; accent-color: var(--berry); }
+.sheet-actions { display: flex; align-items: center; justify-content: space-between; gap: 10px; margin-top: 6px; }
+.sheet .btn-sm { margin-top: 0; }
+.sheet .btn:disabled { opacity: .6; }
+.del { color: #FF7A9C; font-weight: 800; padding: 12px 4px; border-radius: 999px; transition: .2s; }
+.del.arm { color: #fff; background: #E0234F; padding: 12px 18px; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
-  [data-a], .intro-title .ch, .intro-sub, .intro .btn, .reason-card { opacity: 1 !important; transform: none !important; }
+  [data-a], .intro-title .ch, .intro-sub, .who, .reason-card { opacity: 1 !important; transform: none !important; }
 }
