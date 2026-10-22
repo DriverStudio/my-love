@@ -154,7 +154,7 @@ $('#app').addEventListener('touchend', e => {
   function enter(btn, chars, pt) {
     const r = btn.getBoundingClientRect(), x = pt ? pt[0] : r.left + r.width / 2, y = pt ? pt[1] : r.top + r.height / 2;
     fx.burst(x, y, chars, 60, 1.4); buzz(30);
-    if (isAdmin) { $('#suggest').hidden = true; $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 8); initAdmin(); }
+    if (isAdmin) { $('#suggest').hidden = true; $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 8); initAdmin(); loadPlans(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
     go(0, x, y);
     setTimeout(() => $('#nav').classList.add('on'), 700);
@@ -390,34 +390,43 @@ $('#jar').onclick = () => {
 
 /* ================= 5. планы ================= */
 let plans = [];
+const HEART = '<svg viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21C5 16 1 12.5 1 7.5 1 4 3.7 1.5 7 1.5c2 0 3.8 1 5 2.7C13.2 2.5 15 1.5 17 1.5c3.3 0 6 2.5 6 6 0 5-4 8.5-11 13.5Z"/></svg>';
 function plansSub() {
-  const liked = plans.filter(p => p.liked).length;
-  const ok = plans.filter(p => p.approved);
-  $('#plansSub').textContent = `Сделали ${ok.filter(p => p.done).length} из ${ok.length}, твоих сердечек ${liked}`;
+  const ok = plans.filter(p => p.approved), both = plans.filter(p => p.liked && p.liked_he).length;
+  $('#plansSub').textContent = `Сделали ${ok.filter(p => p.done).length} из ${ok.length}` + (both ? `, совпали ${both} 💞` : '');
 }
 async function loadPlans() {
   const ul = $('#plans');
   try {
-    plans = await db('plans?select=id,text,liked,done,approved,by_her&order=id');
+    plans = await db('plans?select=id,text,liked,liked_he,done,approved,by_her&order=id');
     if (!plans.length) { ul.innerHTML = '<li class="empty">Список пока пуст</li>'; return; }
     ul.innerHTML = '';
     for (const p of plans) {
       const li = document.createElement('li');
       li.className = 'plan' + (p.done ? ' done' : '') + (p.approved ? '' : ' pending'); li.dataset.a = '';
-      li.innerHTML = `<span class="check">${p.done ? '✓' : p.approved ? '' : '⏳'}</span><span class="t"><span class="tx"></span>${p.approved ? (p.by_her ? '<span class="tag">твоя идея 💡</span>' : '') : '<span class="tag">ждёт его «да»</span>'}</span><button class="heart" aria-label="Хочу">❤️</button>`;
+      const tag = p.approved ? (p.by_her ? `<span class="tag">${isAdmin ? 'её идея' : 'твоя идея'} 💡</span>` : '') : `<span class="tag">${isAdmin ? 'ждёт твоего «да»' : 'ждёт его «да»'}</span>`;
+      li.innerHTML = `<span class="check">${p.done ? '✓' : p.approved ? '' : '⏳'}</span><span class="t"><span class="tx"></span>${tag}</span>
+        <button class="likes ${isAdmin ? 'me-him' : 'me-her'}" aria-label="Хочу"><span class="lh her">${HEART}</span><span class="lh him">${HEART}</span></button>`;
       $('.tx', li).textContent = p.text;
-      const h = $('.heart', li);
-      const set = v => { p.liked = v; h.setAttribute('aria-pressed', v); plansSub(); };
-      set(p.liked);
-      h.onclick = async () => {
-        if (isAdmin) { toast('Сердечки ставит она 🙂'); return; }
-        set(!p.liked); buzz();
-        if (p.liked) fx.at(h, ['❤️', '💖'], 14, .8);
-        try { await db(`plans?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ liked: p.liked }) }); }
-        catch (e) { console.error(e); set(!p.liked); toast('Не сохранилось, попробуй ещё раз'); }
+      const btn = $('.likes', li), mineK = () => isAdmin ? 'liked_he' : 'liked';
+      const paint = () => {
+        $('.her', btn).classList.toggle('on', !!p.liked); $('.him', btn).classList.toggle('on', !!p.liked_he);
+        btn.classList.toggle('match', !!(p.liked && p.liked_he)); btn.setAttribute('aria-pressed', !!p[mineK()]);
+      };
+      paint();
+      btn.onclick = async () => {
+        const mine = mineK(), v = !p[mine]; p[mine] = v; paint(); plansSub(); buzz();
+        replay($(isAdmin ? '.him' : '.her', btn), 'pump');
+        if (v) fx.at(btn, p.liked && p.liked_he ? ['💞', '💖', '✨'] : [isAdmin ? '💜' : '💗'], p.liked && p.liked_he ? 26 : 10, .8);
+        if (v && p.liked && p.liked_he) toast('Совпадение! 💞');
+        try {
+          if (isAdmin) await rpc('admin_like', { p: adminPass, row_id: p.id, v });
+          else await db(`plans?id=eq.${p.id}`, { method: 'PATCH', headers: { Prefer: 'return=minimal' }, body: JSON.stringify({ liked: v }) });
+        } catch (e) { console.error(e); p[mine] = !v; paint(); plansSub(); toast('Не сохранилось, попробуй ещё раз'); }
       };
       ul.append(li);
     }
+    plansSub();
     stagger($('.s-plans'));
     if (isAdmin) renderTabs();
   } catch (e) { console.error(e); fail(ul); }
@@ -847,7 +856,7 @@ const T = {
   plans: { name: 'Планы', one: 'план', order: 'id',
     fields: [['text', 'Что сделаем', 'text'], ['approved', 'Одобрено (она видит без «ждёт»)', 'check'], ['done', 'Уже сделали', 'check']],
     label: r => (r.approved ? '' : '⏳ ') + r.text,
-    meta: r => [r.approved ? '' : 'Она предложила, ждёт твоего «да»', r.by_her && r.approved ? 'идея от неё' : '', r.done ? '✓ сделали' : '', r.liked ? '❤ она хочет' : ''].filter(Boolean).join(', ') },
+    meta: r => [r.approved ? '' : 'Она предложила, ждёт твоего «да»', r.by_her && r.approved ? 'идея от неё' : '', r.done ? '✓ сделали' : '', r.liked ? '💗 она хочет' : '', r.liked_he ? '💜 ты хочешь' : ''].filter(Boolean).join(', ') },
 };
 T.puzzles = { name: 'Пазлы', one: 'пазл',
   fields: [['image', 'Фото для пазла', 'image'], ['cols', 'Сложность', 'select'],
@@ -1058,8 +1067,7 @@ function warpStars(cv) {
 
 function entrance(done) {
   const warp = $('#warp'), space = $('#warpSpace'), fin = $('#warpFinal'), intro = $('#intro');
-  const short = store.get('warpDay') === dateIn(Date.now()); // второй вход за день — короче
-  store.set('warpDay', dateIn(Date.now()));
+  const short = false; // всегда полный, есть кнопка «Пропустить»
   const timers = [], at = (ms, f) => timers.push(setTimeout(f, ms));
   let stars, finished = false;
   const days = Math.floor(Math.max(0, END - Date.now()) / DAY);
