@@ -512,13 +512,13 @@ GAMES.puzzle = (() => {
       const t = { el, home: h, pos: order[h], conn: {}, g: null };
       st.tiles.push(t); board.append(el); bind(t);
     }
-    recompute(); stats(); layout();
+    recompute(); st.tiles.forEach(t => t.vconn = { ...t.conn }); stats(); layout();
     // раздача: кусочки вылетают из центра
     st.tiles.forEach(t => { t.el.style.transition = 'none'; t.el.style.opacity = 0; t.el.style.transform = `translate(${(st.bw - st.tw) / 2}px,${(st.bh - st.th) / 2}px) scale(.2) rotate(${Math.random() * 60 - 30}deg)`; });
     void board.offsetWidth;
     st.tiles.forEach(t => { t.el.style.transition = ''; t.el.style.transitionDelay = (reduce ? 0 : Math.random() * 450 | 0) + 'ms'; t.el.style.opacity = 1; render(t); });
     setTimeout(() => st && st.tiles.forEach(t => t.el.style.transitionDelay = ''), 1000);
-    ro = new ResizeObserver(layout); ro.observe($('#pzStage'));
+    ro = new ResizeObserver(() => { cancelAnimationFrame(st.lraf); st.lraf = requestAnimationFrame(layout); }); ro.observe($('#pzStage'));
     st.timer = setInterval(() => {
       if (document.hidden || !st || st.done) return;
       st.secs++; $('#pzTime').textContent = fmtT(st.secs); if (st.secs % 5 === 0) save();
@@ -537,6 +537,11 @@ GAMES.puzzle = (() => {
     const stage = $('#pzStage'); if (!stage || !st) return;
     const sw = stage.clientWidth, sh = stage.clientHeight;
     let bw = sw, bh = sw / st.aspect; if (bh > sh) { bh = sh; bw = sh * st.aspect; }
+    bw = Math.floor(bw); bh = Math.floor(bh);
+    if (st.dragging) { st.pendingLayout = true; return; }
+    if (st.bw && Math.abs(bw - st.bw) < 2 && Math.abs(bh - st.bh) < 2) return; // мелкие дёрганья экрана игнорируем
+    const first = !st.bw;
+    if (!first) st.board.classList.add('nofx');
     const g = st.gap;
     Object.assign(st, { bw, bh, g, tw: (bw - g * (st.cols - 1)) / st.cols, th: (bh - g * (st.rows - 1)) / st.rows });
     st.px = st.tw + g; st.py = st.th + g;
@@ -545,15 +550,21 @@ GAMES.puzzle = (() => {
       const [hc, hr] = cr(t.home);
       t.el.style.backgroundSize = `${bw}px ${bh}px`;
       t.el.style.backgroundPosition = `${-hc * st.px}px ${-hr * st.py}px`;
-      if (!t.el.classList.contains('drag')) render(t);
+      shape(t); render(t);
     });
+    if (!first) requestAnimationFrame(() => requestAnimationFrame(() => st && st.board.classList.remove('nofx')));
   }
   // кусок рисуется с «нахлёстом» на щель там, где он склеен с соседом
+  // позиция (только transform — дёшево и плавно)
   function render(t, dx = 0, dy = 0) {
-    const [c, r] = cr(t.pos), k = t.conn, R = 6;
-    const w = st.tw + (k.r ? st.g + 1 : 0), h = st.th + (k.b ? st.g + 1 : 0); // +1px нахлёст, чтобы не было волосяных швов
-    t.el.style.width = w + 'px'; t.el.style.height = h + 'px';
-    t.el.style.transform = `translate(${c * st.px + dx}px,${r * st.py + dy}px)`;
+    const [c, r] = cr(t.pos);
+    t.el.style.transform = `translate3d(${c * st.px + dx}px,${r * st.py + dy}px,0)`;
+  }
+  // форма: склеенные стороны без щели и без скруглений (+1px нахлёст против швов)
+  function shape(t) {
+    const k = t.vconn || {}, R = 6;
+    t.el.style.width = st.tw + (k.r ? st.g + 1 : 0) + 'px';
+    t.el.style.height = st.th + (k.b ? st.g + 1 : 0) + 'px';
     t.el.style.borderRadius = `${k.t || k.l ? 0 : R}px ${k.t || k.r ? 0 : R}px ${k.b || k.r ? 0 : R}px ${k.b || k.l ? 0 : R}px`;
   }
 
@@ -576,7 +587,9 @@ GAMES.puzzle = (() => {
 
   /* --- управление --- */
   function bind(t) {
-    const el = t.el; let sx = 0, sy = 0, drag = false, pid = null;
+    const el = t.el; let sx = 0, sy = 0, dx = 0, dy = 0, drag = false, pid = null, fr = 0;
+    const lift = on => t.g.list.forEach(m => { m.el.classList.toggle('drag', on); m.el.style.zIndex = on ? '' : 6; });
+    const end = () => { cancelAnimationFrame(fr); fr = 0; st.dragging = false; if (st.pendingLayout) { st.pendingLayout = false; layout(); } };
     el.onpointerdown = e => {
       if (st.done) return;
       if (t.g.locked) { t.g.list.forEach(m => replay(m.el, 'nope')); return; }
@@ -584,22 +597,23 @@ GAMES.puzzle = (() => {
     };
     el.onpointermove = e => {
       if (pid !== e.pointerId) return;
-      const dx = e.clientX - sx, dy = e.clientY - sy;
-      if (!drag && Math.hypot(dx, dy) > 7) { drag = true; clearSel(); t.g.list.forEach(m => m.el.classList.add('drag')); }
-      if (drag) t.g.list.forEach(m => render(m, dx, dy));
+      dx = e.clientX - sx; dy = e.clientY - sy;
+      if (!drag && Math.hypot(dx, dy) > 7) { drag = true; st.dragging = true; clearSel(); lift(true); }
+      if (drag && !fr) fr = requestAnimationFrame(() => { fr = 0; t.g.list.forEach(m => render(m, dx, dy)); });
     };
     el.onpointerup = e => {
       if (pid !== e.pointerId) return; pid = null;
       if (!drag) return tap(t);
-      const list = t.g.list; list.forEach(m => m.el.classList.remove('drag'));
-      const r = st.board.getBoundingClientRect();
+      end(); dx = e.clientX - sx; dy = e.clientY - sy;
+      const list = t.g.list; lift(false);
+      setTimeout(() => list.forEach(m => { if (m.el.style.zIndex === '6') m.el.style.zIndex = ''; }), 350);
       // куда встал схваченный кусок: по его центру
       const [pc, pr] = cr(t.pos);
-      const cx = pc * st.px + st.tw / 2 + (e.clientX - sx), cy = pr * st.py + st.th / 2 + (e.clientY - sy);
+      const cx = pc * st.px + st.tw / 2 + dx, cy = pr * st.py + st.th / 2 + dy;
       const tc = Math.max(0, Math.min(st.cols - 1, Math.floor(cx / st.px))), tr = Math.max(0, Math.min(st.rows - 1, Math.floor(cy / st.py)));
       if (!move(list, tc - pc, tr - pr)) list.forEach(m => render(m));
     };
-    el.onpointercancel = () => { pid = null; t.g.list.forEach(m => { m.el.classList.remove('drag'); render(m); }); };
+    el.onpointercancel = () => { if (pid === null) return; pid = null; if (drag) { end(); lift(false); t.g.list.forEach(m => render(m)); } };
   }
   function clearSel() { if (st.sel) { st.sel.g.list.forEach(m => m.el.classList.remove('sel')); st.sel = null; } }
   function tap(t) {
@@ -631,6 +645,11 @@ GAMES.puzzle = (() => {
     target.forEach((cell, m) => { m.pos = cell; m.el.style.zIndex = 4; });
     displaced.forEach(([o, y]) => { o.pos = y; o.el.style.zIndex = 3; });
     recompute(); st.tiles.forEach(x => render(x));
+    clearTimeout(st.shapeT);
+    st.shapeT = setTimeout(() => st && st.tiles.forEach(x => { // склейку рисуем, когда куски доехали
+      const v = x.vconn || {}, k = x.conn;
+      if (v.r !== k.r || v.b !== k.b || v.l !== k.l || v.t !== k.t) { x.vconn = { ...k }; shape(x); }
+    }), 300);
     setTimeout(() => [...target.keys(), ...displaced.map(d => d[0])].forEach(x => x.el.style.zIndex = ''), 400);
     st.moves++; stats(); buzz(8);
     if (links() > before) { // новая склейка
@@ -646,6 +665,7 @@ GAMES.puzzle = (() => {
     return true;
   }
   function win() {
+    st.tiles.forEach(x => { x.vconn = { ...x.conn }; shape(x); });
     st.done = true; clearInterval(st.timer); store.set(key(st.p.id), null);
     st.board.classList.add('solved');
     navigator.vibrate && navigator.vibrate([40, 60, 80]);

@@ -434,11 +434,13 @@ dialog.sheet[open] { animation: slideup .45s var(--ease); }
 .pz-loading { position: absolute; color: #C7B4F0; font-weight: 700; }
 .tile {
   position: absolute; left: 0; top: 0; border-radius: 6px; background-repeat: no-repeat; touch-action: none; will-change: transform;
-  transition: transform .34s cubic-bezier(.2,.9,.3,1.12), opacity .3s, width .25s ease, height .25s ease, border-radius .25s, filter .3s;
+  transition: transform .3s cubic-bezier(.25,.8,.25,1), opacity .3s, width .14s ease-out, height .14s ease-out, border-radius .14s ease-out;
+  backface-visibility: hidden;
 }
-.tile.drag { transition: width .25s, height .25s, border-radius .25s; z-index: 10; filter: drop-shadow(0 16px 18px rgba(0,0,0,.55)) brightness(1.05); }
+.tile.drag { transition: none; z-index: 10; }
+.pz-board.nofx .tile { transition: none !important; }
 .tile.sel { z-index: 5; animation: selpulse 1s ease-in-out infinite; }
-@keyframes selpulse { 50% { filter: brightness(1.35) drop-shadow(0 0 8px rgba(255,216,107,.9)); } }
+@keyframes selpulse { 50% { filter: brightness(1.3); } }
 .tile.ok { cursor: default; }
 .tile.flash { animation: flash .7s ease-out; }
 @keyframes flash { 0% { filter: brightness(2) saturate(1.5); } 100% { filter: none; } }
