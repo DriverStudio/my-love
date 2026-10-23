@@ -1024,7 +1024,10 @@ function renderTabs() {
 }
 $('#admTabs').onclick = e => { const b = e.target.closest('button'); if (!b || b.dataset.k === admTab) return; admTab = b.dataset.k; renderTabs(); loadAdm(); buzz(); };
 async function loadAdm() {
-  const list = $('#admList'); list.innerHTML = '<p class="err">Загружаю…</p>';
+  const list = $('#admList');
+  $('#admAdd').hidden = !!T[admTab].custom;
+  if (T[admTab].custom) return T[admTab].custom(list); // вкладки со своим экраном (солдатик)
+  list.innerHTML = '<p class="err">Загружаю…</p>';
   try { admRows = (await rpc('admin_list', { p: adminPass, tbl: admTab })) || []; renderAdm(); }
   catch (e) { console.error(e); fail(list); }
 }
