@@ -170,3 +170,11 @@
 .sa-sw button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); }
 .sa-sw button[aria-pressed="true"] { border-color: #fff; transform: scale(1.12); box-shadow: 0 0 0 2px var(--berry); }
 .sa-save { position: sticky; bottom: 8px; z-index: 2; }
+
+/* фото в рамке */
+.frame-img { display: none; }
+[data-photo="1"] .frame-img { display: inline; } [data-photo="1"] .frame-heart { display: none; }
+.sa-frame { display: flex; gap: 14px; align-items: center; }
+.sa-fprev { width: 84px; height: 96px; flex: none; border-radius: 6px; padding: 6px; background: #C9A24A; box-shadow: 0 8px 18px -8px rgba(0,0,0,.6); }
+.sa-fprev img, .sa-fprev span { width: 100%; height: 100%; display: grid; place-items: center; object-fit: cover; background: #FFE0EE; font-size: 1.8rem; }
+.sa-fside { flex: 1; min-width: 0; }

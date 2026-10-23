@@ -404,6 +404,7 @@
   $$('.us-tile').forEach(t => t.onclick = () => { buzz(); openLayer(OPEN[t.dataset.open]); });
   async function badges() {
     let s; try { s = await call('us_summary'); } catch (e) { console.error(e); return; }
+    if (!s) return;
     const newDiary = (s.diary_last || 0) > (store.get('usDiarySeen' + me()) || 0);
     const set = (k, n, txt) => { const t = $(`.us-tile[data-open="${k}"]`); const b = $('.badge', t); b.hidden = !n; b.textContent = n; $('small', t).textContent = txt; };
     set('diary', newDiary ? '•' : 0, newDiary ? 'Есть новое от ' + (isAdmin ? 'неё' : 'него') : `${s.diary_count} ${plural(s.diary_count, ['запись', 'записи', 'записей'])}`);

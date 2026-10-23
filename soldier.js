@@ -102,7 +102,8 @@
         <g class="hold x-sign"><rect x="-50" y="-112" width="100" height="50" rx="8" fill="#FFFDF6" stroke="#C9A24A" stroke-width="3"/>
           <text class="sd-signtext" x="0" y="-87" text-anchor="middle"></text></g>
         <g class="hold x-frame"><rect x="-20" y="-96" width="40" height="46" rx="4" fill="#C9A24A"/><rect x="-15" y="-91" width="30" height="36" fill="#FFE0EE"/>
-          <path d="M0-62C-10-69-12-76-6-79-3-80 0-78 0-75 0-78 3-80 6-79 12-76 10-69 0-62Z" fill="#FF3D8B"/></g>
+          <path class="frame-heart" d="M0-62C-10-69-12-76-6-79-3-80 0-78 0-75 0-78 3-80 6-79 12-76 10-69 0-62Z" fill="#FF3D8B"/>
+          <image class="frame-img" x="-15" y="-91" width="30" height="36" preserveAspectRatio="xMidYMid slice"/></g>
         <g class="hold x-letter"><rect x="-22" y="-100" width="44" height="34" rx="3" fill="#fff"/><path d="M-16-90H16M-16-83H12M-16-76H8" stroke="#C9B9D9" stroke-width="2"/></g>
         <g transform="translate(0 -150)"><g class="sd-head">
           ${head(false)}
@@ -154,12 +155,19 @@
       <g class="tumb" transform="translate(262 300)">
         <rect width="72" height="92" rx="4" fill="#A47148"/><rect x="6" y="10" width="60" height="30" rx="3" fill="#B98258"/><circle cx="36" cy="25" r="3" fill="#6E4A2C"/>
         <g class="frame" transform="translate(16 -42)"><rect width="38" height="42" rx="3" fill="#C9A24A"/><rect x="4" y="4" width="30" height="34" fill="#FFE0EE"/>
-          <path d="M19 32C9 25 7 18 13 14 16 13 19 15 19 18 19 15 22 13 25 14 31 18 29 25 19 32Z" fill="#FF3D8B"/></g>
+          <path class="frame-heart" d="M19 32C9 25 7 18 13 14 16 13 19 15 19 18 19 15 22 13 25 14 31 18 29 25 19 32Z" fill="#FF3D8B"/>
+          <image class="frame-img" x="4" y="4" width="30" height="34" preserveAspectRatio="xMidYMid slice"/>
+          <rect x="4" y="4" width="30" height="34" fill="none" stroke="rgba(0,0,0,.15)"/></g>
         <text class="phone" x="58" y="-6" font-size="18">📱</text>
       </g>
 `;
   }
 
+  // фото в рамке (на тумбочке и в руках)
+  function setFrame(root, img) {
+    $$('.frame-img', root).forEach(el => img ? el.setAttribute('href', img) : el.removeAttribute('href'));
+    root.dataset.photo = img ? 1 : 0;
+  }
   // перенос текста таблички на 1–3 строки
   function signText(el, t) {
     if (!el) return;
@@ -206,6 +214,7 @@
       s.dataset.covered = store.get('sdBlanket') === nightKey(cfg) ? 1 : 0;
       $('.cal-n', s).textContent = days; $('.cal-w', s).textContent = plural(days, DAYS);
       signText($('.sd-signtext', s), cfg.sign || '');
+      setFrame(s, cfg.frame_img);
       $('#sdRank').textContent = `${rk.name}, ${rk.pct.toFixed(0)}%`;
       const txt = phase === 'sleep' ? 'Отбой. Спит и видит тебя во сне 💤'
         : phase === 'exercise' ? 'Утренняя зарядка! 🏃'
@@ -341,7 +350,7 @@
       $('.sleeper', s).onclick = () => cfg && hug();
       $('.dream', s).onclick = e => { e.stopPropagation(); dream(); };
       $('.cal', s).onclick = () => { if (!cfg) return; const d = Math.floor(Math.max(0, END - Date.now()) / DAY); bubble(`Осталось ${d} ${plural(d, DAYS)} 📅`); if (phase === 'evening') crossDay(); };
-      $('.frame', s).onclick = () => bubble('Тут твоё фото. Смотрю на него каждый день 💗');
+      $('.frame', s).onclick = () => bubble(cfg && cfg.frame_img ? 'Это ты. Смотрю на тебя каждый день 💗' : 'Тут будет твоё фото 💗');
       $('.win', s).onclick = () => bubble(phase === 'sleep' ? 'Ночь. Звёзды как у тебя за окном ✨' : 'Смотрю в окно и думаю о тебе');
     }
 
@@ -408,6 +417,12 @@
           <div class="sa-notes">${(r.notes || []).map(n => `<div class="${n.is_read ? '' : 'new'}"><p>${esc(n.payload)}</p><small>${new Date(n.created_at).toLocaleString('ru-RU', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' })}${n.is_read ? '' : ' • новая'}</small></div>`).join('') || '<p class="err">Записок пока нет</p>'}</div>
           <label class="field"><span>Ответ ей (появится у солдатика)</span><textarea id="saReply" rows="2" maxlength="140">${esc(c.reply)}</textarea></label>
         </section>
+        <section class="sa-sec"><h4>Фото в рамке</h4>
+          <div class="sa-frame"><div class="sa-fprev" id="saFprev">${c.frame_img ? `<img src="${c.frame_img}" alt="">` : '<span>💗</span>'}</div>
+            <div class="sa-fside"><p class="sa-lbl" id="saFcap">${c.frame_img ? 'Стоит на тумбочке и в его руках, когда скучает' : 'Пока сердечко. Поставь её фото'}</p>
+              <div class="img-btns"><label class="chip">🖼 Галерея<input type="file" accept="image/*" hidden></label><label class="chip">📁 Файлы<input type="file" hidden></label>
+              <button type="button" class="chip" id="saFdel" ${c.frame_img ? '' : 'hidden'}>Убрать</button></div></div></div>
+        </section>
         <section class="sa-sec"><h4>Распорядок</h4>
           <div class="sa-row"><label class="field"><span>Подъём</span><input type="time" id="saWake" value="${esc(c.wake || '06:00')}"></label>
             <label class="field"><span>Отбой</span><input type="time" id="saSleep" value="${esc(c.sleep || '22:00')}"></label></div>
@@ -435,10 +450,21 @@
         <button class="btn sa-save" id="saSave">Сохранить</button>
       </div>`;
 
+    let frameImg; // undefined — не трогаем, '' — убрать, строка — новое фото
+    $$('.sa-frame input[type="file"]', box).forEach(inp => inp.onchange = async () => {
+      const f = inp.files[0]; inp.value = ''; if (!f) return;
+      $('#saFcap').textContent = '⏳ Обрабатываю…';
+      try {
+        frameImg = (await processImage(f, 260)).image;
+        $('#saFprev').innerHTML = `<img src="${frameImg}" alt="">`; $('#saFdel').hidden = false;
+        $('#saFcap').textContent = 'Нажми «Сохранить» внизу'; setFrame(prev, frameImg); replay($('#saFprev'), 'pop-in');
+      } catch (e) { console.error(e); $('#saFcap').textContent = 'Не открылось, попробуй другое фото'; }
+    });
+    $('#saFdel').onclick = () => { frameImg = ''; $('#saFprev').innerHTML = '<span>💗</span>'; $('#saFdel').hidden = true; $('#saFcap').textContent = 'Нажми «Сохранить» внизу'; setFrame(prev, null); };
     const prev = $('#saPrev');
     const showLook = () => { prev.style.setProperty('--skin', SKIN[look.skin]); prev.style.setProperty('--hair', look.hair); prev.style.setProperty('--eyes', look.eyes);
       prev.dataset.hair = look.style; prev.dataset.glasses = look.glasses ? 1 : 0; prev.dataset.stubble = look.stubble ? 1 : 0; prev.dataset.st = status; };
-    showLook();
+    showLook(); setFrame(prev, c.frame_img);
     const press = (wrap, v) => $$('button', wrap).forEach(b => b.setAttribute('aria-pressed', b.dataset.v === String(v)));
     $('#saStatus').onclick = e => { const b = e.target.closest('button'); if (!b) return; status = b.dataset.v; press($('#saStatus'), status); showLook(); buzz(); };
     $('#saDays').onclick = e => { const b = e.target.closest('button'); if (!b) return; const i = +b.dataset.v; days.has(i) ? days.delete(i) : days.add(i); b.setAttribute('aria-pressed', days.has(i)); buzz(); };
@@ -452,6 +478,7 @@
       const pl = $('#saParcels').value.split('\n').map(l => l.trim()).filter(Boolean).map(l => { const m = l.match(/^(\S+)\s+(.+)$/); return m ? { e: m[1], name: m[2] } : { e: '🎁', name: l }; });
       const d = { status, sign: $('#saSign').value.trim(), offline_until: $('#saOff').value, wake: $('#saWake').value || '06:00', sleep: $('#saSleep').value || '22:00',
         call_days: [...days].sort(), look, parcels: pl, reply: $('#saReply').value.trim(), final_letter: $('#saFinal').value.trim() };
+      if (frameImg !== undefined) d.frame_img = frameImg;
       try { await rpc('admin_soldier_set', { p: adminPass, d }); toast('Сохранено 🪖'); fx.at(btn, ['🫡', '✨', '💖'], 18); }
       catch (e) { console.error(e); toast(/bad password/.test(e.message) ? 'Пароль сменился, войди заново' : 'Не сохранилось, проверь интернет'); }
       finally { btn.disabled = false; btn.textContent = 'Сохранить'; }
