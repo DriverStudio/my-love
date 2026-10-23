@@ -156,13 +156,15 @@ $('#app').addEventListener('touchmove', e => {
   if (!sw || sw.dead) return;
   const t = e.touches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y;
   if (Math.abs(dy) > 24 && Math.abs(dy) > Math.abs(dx)) sw.dead = true; // человек листает вниз — не мешаем
+  sw.lx = t.clientX; sw.ly = t.clientY;
 }, { passive: true });
 $('#app').addEventListener('touchend', e => {
   if (!sw || sw.dead || e.touches.length) { sw = null; return; }
-  const t = e.changedTouches[0], dx = t.clientX - sw.x, dy = t.clientY - sw.y, dt = Date.now() - sw.t;
+  const t = e.changedTouches[0], ex = sw.lx ?? t.clientX, ey = sw.ly ?? t.clientY;
+  const dx = ex - sw.x, dy = ey - sw.y, dt = Date.now() - sw.t;
   sw = null;
-  if (dt > 650 || Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 2) return;
-  go(cur + (dx < 0 ? 1 : -1), dx < 0 ? innerWidth : 0, t.clientY);
+  if (dt > 900 || Math.abs(dx) < 80 || Math.abs(dx) < Math.abs(dy) * 2) return;
+  go(cur + (dx < 0 ? 1 : -1), dx < 0 ? innerWidth : 0, ey);
 }, { passive: true });
 $('#app').addEventListener('touchcancel', () => sw = null, { passive: true });
 

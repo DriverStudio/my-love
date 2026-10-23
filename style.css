@@ -555,6 +555,9 @@ dialog.sheet[open] { animation: slideup .45s var(--ease); }
 .mm-card.match .mm-in { animation: matchpop .55s var(--spring); }
 @keyframes matchpop { 50% { transform: rotateY(180deg) scale(1.12); } }
 
+/* вертикальные скроллы никогда не уезжают вбок (иначе экран «сдвигается» и ломает свайпы) */
+.content, .us-scroll, .pz-list, .mm-menu, .sa-notes, .letter p, .sd-panel { overflow-x: hidden; }
+
 /* в колонках со скроллом элементы не сплющиваются */
 .layer-body > *, .us-scroll > *, .mm-menu > *, .pz-foot > * { flex-shrink: 0; }
 .layer-body > .pz-stage, .layer-body > .mm-stage, .layer-body > .sd-stage, .layer-body > .board, .layer-body > .fr-door,
