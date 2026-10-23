@@ -124,7 +124,33 @@
 .fr-item.glide { transition: left .5s var(--ease), top .5s var(--ease), scale .15s; }
 .fr-x { position: absolute; top: -12px; right: -12px; width: 26px; height: 26px; border-radius: 50%; background: #E0234F; color: #fff; font-size: .75rem; font-weight: 800; display: none; font-family: Manrope, sans-serif; line-height: 26px; }
 .fr-item.armed .fr-x { display: block; }
-.fr-tools .fr-m { flex: none; font-size: 1.7rem; width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,.1); }
+.fr-panel .fr-m { flex: none; font-size: 1.7rem; width: 44px; height: 44px; border-radius: 12px; background: rgba(255,255,255,.1); }
 .fr-cols { display: flex; gap: 6px; }
 .fr-cols button { width: 28px; height: 28px; border-radius: 50%; border: 2px solid transparent; }
 .fr-cols button[aria-pressed="true"] { border-color: #fff; }
+
+/* холодильник: режимы, буквы, фото разной формы */
+.sa-chips.fr-modes { margin: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.sa-chips.fr-modes::-webkit-scrollbar { display: none; }
+.fr-panel { min-height: 50px; }
+.fr-panel input:not([type="file"]) { width: 100%; padding: 12px 14px; border-radius: 14px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08);
+  color: #fff; font: 600 16px Manrope, sans-serif; outline: none; }
+.fr-row { margin-top: 8px; } .fr-row input { flex: 1; min-width: 0; }
+.sa-chips.fr-shapes { margin: 0; flex-wrap: nowrap; overflow-x: auto; scrollbar-width: none; }
+.fr-phst { font-size: 1.2rem; }
+.fr-item.letters { display: flex; align-items: flex-end; font: 800 34px/1 Unbounded, sans-serif; white-space: nowrap; }
+.fr-item.letters span { display: inline-block; rotate: var(--t, 0deg); -webkit-text-stroke: 1px rgba(0,0,0,.12);
+  text-shadow: 0 2px 0 rgba(0,0,0,.22), 0 6px 8px rgba(0,0,0,.25), inset 0 1px 0 #fff; }
+.fr-item.letters .sp { width: 12px; }
+.fr-item.photo .ph img { display: block; width: 92px; height: 92px; object-fit: cover; pointer-events: none; }
+.fr-item.sh-polaroid .ph { background: #fff; padding: 6px 6px 22px; box-shadow: 0 10px 16px rgba(0,0,0,.28); }
+.fr-item.sh-polaroid::before { content: ""; position: absolute; top: -9px; left: 50%; translate: -50% 0; z-index: 2; width: 20px; height: 20px; border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, #8FD3FF, #2F7BFF); box-shadow: 0 3px 4px rgba(0,0,0,.3); }
+.fr-item.sh-circle .ph, .fr-item.sh-heart .ph, .fr-item.sh-star .ph, .fr-item.sh-round .ph { filter: drop-shadow(0 8px 8px rgba(0,0,0,.3)); }
+.fr-item.sh-circle img { border-radius: 50%; border: 4px solid #fff; }
+.fr-item.sh-round img { border-radius: 20px; border: 4px solid #fff; }
+.fr-item.sh-heart img { width: 100px; height: 92px; clip-path: path('M50 90C22 70 3 54 3 31 3 15 15 4 29 4 38 4 45 9 50 17 55 9 62 4 71 4 85 4 97 15 97 31 97 54 78 70 50 90Z'); }
+.fr-item.sh-star img { width: 100px; height: 100px; clip-path: polygon(50% 0%, 61% 35%, 98% 35%, 68% 57%, 79% 91%, 50% 70%, 21% 91%, 32% 57%, 2% 35%, 39% 35%); }
+.us-more { align-self: center; padding: 10px; }
+
+.sa-chips.fr-modes button, .sa-chips.fr-shapes button { flex: none; }

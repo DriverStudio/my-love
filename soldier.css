@@ -169,7 +169,8 @@
 .sa-sw { display: flex; flex-wrap: wrap; gap: 6px; margin-bottom: 6px; }
 .sa-sw button { width: 30px; height: 30px; border-radius: 50%; border: 2px solid rgba(255,255,255,.25); }
 .sa-sw button[aria-pressed="true"] { border-color: #fff; transform: scale(1.12); box-shadow: 0 0 0 2px var(--berry); }
-.sa-save { position: sticky; bottom: 8px; z-index: 2; }
+.sa-save { position: fixed; z-index: 31; left: 50%; translate: -50% 0; bottom: calc(env(safe-area-inset-bottom, 0px) + 90px); width: min(88vw, 400px);
+  box-shadow: 0 16px 34px -8px rgba(255,61,139,.9), 0 0 0 4px rgba(30,8,40,.5); }
 
 /* фото в рамке */
 .frame-img { display: none; }

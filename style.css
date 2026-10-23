@@ -555,6 +555,12 @@ dialog.sheet[open] { animation: slideup .45s var(--ease); }
 .mm-card.match .mm-in { animation: matchpop .55s var(--spring); }
 @keyframes matchpop { 50% { transform: rotateY(180deg) scale(1.12); } }
 
+/* в колонках со скроллом элементы не сплющиваются */
+.layer-body > *, .us-scroll > *, .mm-menu > *, .pz-foot > * { flex-shrink: 0; }
+.layer-body > .pz-stage, .layer-body > .mm-stage, .layer-body > .sd-stage, .layer-body > .board, .layer-body > .fr-door,
+.layer-body > .us-scroll, .layer-body > .pz-list, .layer-body > .mm-menu { flex-shrink: 1; }
+.mm-menu { flex: 1; min-height: 0; overflow-y: auto; }
+
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after { animation: none !important; transition: none !important; }
   [data-a], .intro-title .ch, .intro-sub, .who, .reason-card { opacity: 1 !important; transform: none !important; }

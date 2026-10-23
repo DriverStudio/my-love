@@ -159,11 +159,13 @@
         catch (e) { console.error(e); toast(errText(e)); }
         finally { b.disabled = false; b.textContent = 'Опубликовать'; }
       };
+      let shown = 15;
       const load = async () => {
         let rows;
-        try { rows = await db('diary?select=id,who,img,body,reaction,created_at&order=id.desc&limit=40'); }
+        try { rows = await db(`diary?select=id,who,img,body,reaction,created_at&order=id.desc&limit=${shown + 1}`); }
         catch (e) { console.error(e); fail($('#dList')); return; }
         const list = $('#dList'); if (!list) return;
+        const more = rows.length > shown; rows = rows.slice(0, shown);
         const lastOther = Math.max(0, ...rows.filter(r => r.who !== me()).map(r => r.id)); store.set('usDiarySeen' + me(), lastOther); badges();
         if (!rows.length) { list.innerHTML = `<p class="err">Записей пока нет. ${isAdmin ? 'Её день появится здесь.' : 'Расскажи ему про свой день 💗'}</p>`; return; }
         list.innerHTML = '';
@@ -185,6 +187,7 @@
           };
           list.append(c);
         });
+        if (more) { const m = document.createElement('button'); m.className = 'link us-more'; m.textContent = 'Показать ещё'; m.onclick = () => { shown += 15; load(); }; list.append(m); }
       };
       load();
     },
@@ -316,18 +319,34 @@
   };
 
   /* ================= 11. ХОЛОДИЛЬНИК ================= */
-  const MAGNETS = ['🌸', '💗', '🍓', '⭐', '🐻', '🌙', '🍕', '🎀', '🐱', '🔥', '🦋', '🍒', '☀️', '🪖', '💌', '🌈'];
+  const MAGNETS = ['🌸', '💗', '🍓', '⭐', '🐻', '🌙', '🍕', '🎀', '🐱', '🔥', '🦋', '🍒', '☀️', '🪖', '💌', '🌈', '🍉', '🧸', '🌻', '🍩'];
   const NOTE_COL = ['#FFF3A6', '#FFD3E2', '#D6F5E6', '#E3D6FF', '#FFE0C2'];
+  const LET_COL = ['#E0234F', '#FF8A1F', '#F5C400', '#2DBE7E', '#2F7BFF', '#8A4DFF', '#FF4FA3'];
+  const SHAPES = [['polaroid', '🖼', 'Полароид'], ['circle', '⚪', 'Круг'], ['heart', '💗', 'Сердце'], ['star', '⭐', 'Звезда'], ['round', '▢', 'Квадрат']];
   const Fridge = (() => {
     let board, items = new Map(), timer = 0, dragging = null, armed = null;
     const place = (el, r) => { el.style.left = r.x * 100 + '%'; el.style.top = r.y * 100 + '%'; el.style.setProperty('--r', (r.rot || 0) + 'deg'); };
     function make(r) {
       const el = document.createElement('div');
       el.className = 'fr-item ' + r.kind + (r.who === me() ? ' mine' : '');
-      if (r.kind === 'note') { el.style.background = r.color || NOTE_COL[0]; el.textContent = r.content; } else el.textContent = r.content;
-      if (r.who === me()) { const x = document.createElement('button'); x.className = 'fr-x'; x.textContent = '✕'; el.append(x);
+      if (r.kind === 'note') { el.style.background = r.color || NOTE_COL[0]; el.textContent = r.content; }
+      else if (r.kind === 'letters') {
+        el.style.fontSize = Math.max(18, Math.min(34, 250 / r.content.length)) + 'px'; // длинное слово — буквы мельче
+        [...r.content].forEach((ch, i) => {
+          const sp = document.createElement('span');
+          if (ch === ' ') sp.className = 'sp'; else { sp.textContent = ch; sp.style.color = LET_COL[(i * 3 + r.id) % LET_COL.length]; sp.style.setProperty('--t', ((i * 7 + r.id) % 11 - 5) + 'deg'); }
+          el.append(sp);
+        });
+      } else if (r.kind === 'photo') {
+        el.classList.add('sh-' + (r.color || 'polaroid'));
+        const im = new Image(); im.src = r.content; im.alt = ''; im.draggable = false;
+        const fr = document.createElement('div'); fr.className = 'ph'; fr.append(im); el.append(fr);
+      } else el.textContent = r.content;
+      if (r.who === me()) {
+        const x = document.createElement('button'); x.className = 'fr-x'; x.textContent = '✕'; el.append(x);
         x.onpointerdown = e => e.stopPropagation();
-        x.onclick = async e => { e.stopPropagation(); el.remove(); items.delete(r.id); try { await call('fridge_del', { fid: r.id }); } catch (er) { toast(errText(er)); } }; }
+        x.onclick = async e => { e.stopPropagation(); el.remove(); items.delete(r.id); try { await call('fridge_del', { fid: r.id }); } catch (er) { toast(errText(er)); } };
+      }
       place(el, r); bindDrag(el, r); board.append(el); return el;
     }
     function bindDrag(el, r) {
@@ -336,7 +355,7 @@
         if (e.target.classList.contains('fr-x')) return;
         pid = e.pointerId; el.setPointerCapture(pid); moved = false; dragging = r.id;
         const b = board.getBoundingClientRect(); sx = e.clientX; sy = e.clientY; ox = r.x * b.width; oy = r.y * b.height;
-        el.classList.add('drag');
+        el.classList.add('drag'); board.append(el); // наверх стопки
       };
       el.onpointermove = e => {
         if (pid !== e.pointerId) return;
@@ -346,7 +365,7 @@
       };
       const end = async e => {
         if (pid !== e.pointerId) return; pid = null; el.classList.remove('drag');
-        if (!moved) { // двойной тап по своему — показать крестик
+        if (!moved) {
           const now = Date.now();
           if (r.who === me() && now - lastTap < 350) { if (armed && armed !== el) armed.classList.remove('armed'); el.classList.toggle('armed'); armed = el; }
           lastTap = now; dragging = null; return;
@@ -357,16 +376,23 @@
       };
       el.onpointerup = end; el.onpointercancel = end;
     }
+    // лёгкая синхронизация: тянем только координаты, полные данные — только для новых
     async function sync(first) {
       clearTimeout(timer);
       if (!board || !board.isConnected) return;
       try {
-        const rows = await db('fridge?select=*&order=id');
-        const seen = new Set();
-        rows.forEach(r => {
-          seen.add(r.id); const cur = items.get(r.id);
-          if (!cur) { const el = make(r); items.set(r.id, { r, el }); if (!first) replay(el, 'pop-in'); }
-          else if (dragging !== r.id && (Math.abs(cur.r.x - r.x) > .001 || Math.abs(cur.r.y - r.y) > .001)) { cur.r.x = r.x; cur.r.y = r.y; cur.el.classList.add('glide'); place(cur.el, cur.r); setTimeout(() => cur.el.classList.remove('glide'), 600); }
+        const pos = await db('fridge?select=id,x,y&order=id');
+        const fresh = pos.filter(p => !items.has(p.id)).map(p => p.id);
+        if (fresh.length) {
+          const full = await db(`fridge?select=*&id=in.(${fresh.join(',')})&order=id`);
+          full.forEach(r => { const el = make(r); items.set(r.id, { r, el }); if (!first) replay(el, 'pop-in'); });
+        }
+        const seen = new Set(pos.map(p => p.id));
+        pos.forEach(p => {
+          const cur = items.get(p.id);
+          if (cur && dragging !== p.id && (Math.abs(cur.r.x - p.x) > .001 || Math.abs(cur.r.y - p.y) > .001)) {
+            cur.r.x = p.x; cur.r.y = p.y; cur.el.classList.add('glide'); place(cur.el, cur.r); setTimeout(() => cur.el.classList.remove('glide'), 600);
+          }
         });
         items.forEach((v, id) => { if (!seen.has(id)) { v.el.remove(); items.delete(id); } });
         const empty = $('#frEmpty'); if (empty) empty.hidden = items.size > 0;
@@ -374,24 +400,51 @@
       timer = setTimeout(sync, document.hidden ? 10000 : 3500);
     }
     async function add(kind, content, color) {
-      const r = { kind, content, x: .2 + Math.random() * .6, y: .15 + Math.random() * .6, rot: Math.round(Math.random() * 16 - 8), color };
-      try { await call('fridge_add', { k: kind, c: content, nx: r.x, ny: r.y, r0: r.rot, col: color || null }); buzz(10); sync(); }
-      catch (e) { toast(/full/.test(e.message) ? 'Холодильник переполнен, убери что-нибудь' : errText(e)); }
+      const r = { x: kind === 'letters' ? .45 + Math.random() * .1 : .2 + Math.random() * .6, y: .15 + Math.random() * .6, rot: kind === 'letters' ? 0 : Math.round(Math.random() * 16 - 8) };
+      try { await call('fridge_add', { k: kind, c: content, nx: r.x, ny: r.y, r0: r.rot, col: color || null }); buzz(10); sync(); return true; }
+      catch (e) { toast(/full/.test(e.message) ? 'Холодильник переполнен, убери что-нибудь' : /photos/.test(e.message) ? 'Фоток на дверце уже 40, убери какую-нибудь' : errText(e)); return false; }
     }
     return {
       title: 'Холодильник',
       open(root) {
         items = new Map(); dragging = null; armed = null;
         root.innerHTML = `<div class="fr-door" id="frBoard"><span class="fr-handle"></span><p class="fr-empty" id="frEmpty" hidden>Пусто. Прилепи первый магнитик 🧲</p></div>
-          <div class="tools fr-tools">${MAGNETS.map(m => `<button class="fr-m" data-m="${m}">${m}</button>`).join('')}<span class="sep"></span><button class="chip" id="frNote">📝 Записка</button></div>
-          <div class="us-form fr-nform" id="frNform" hidden><input id="frNin" maxlength="80" placeholder="Коротко, на стикер"><div class="us-row"><div class="fr-cols">${NOTE_COL.map((c, i) => `<button data-c="${c}" style="background:${c}" aria-pressed="${!i}"></button>`).join('')}</div><button class="btn btn-sm" id="frNadd">Прилепить</button></div></div>
+          <div class="sa-chips fr-modes" id="frModes"><button data-m="mag" aria-pressed="true">🧲 Магниты</button><button data-m="let" aria-pressed="false">🔤 Буквы</button><button data-m="ph" aria-pressed="false">📷 Фото</button><button data-m="note" aria-pressed="false">📝 Записка</button></div>
+          <div class="fr-panel" id="frPanel"></div>
           <p class="us-hint">Тащи что угодно. Своё убрать — двойной тап и ✕</p>`;
         board = $('#frBoard');
-        let col = NOTE_COL[0];
-        $('.fr-tools').onclick = e => { const b = e.target.closest('.fr-m'); if (b) { add('magnet', b.dataset.m); replay(b, 'pump'); } };
-        $('#frNote').onclick = () => { $('#frNform').hidden = !$('#frNform').hidden; if (!$('#frNform').hidden) $('#frNin').focus(); };
-        $('.fr-cols').onclick = e => { const b = e.target.closest('button'); if (!b) return; col = b.dataset.c; $$('.fr-cols button').forEach(x => x.setAttribute('aria-pressed', x === b)); };
-        $('#frNadd').onclick = () => { const t = $('#frNin').value.trim(); if (!t) { replay($('#frNin'), 'shake'); return; } add('note', t, col); $('#frNin').value = ''; $('#frNform').hidden = true; };
+        const panel = $('#frPanel');
+        const modes = {
+          mag() {
+            panel.innerHTML = `<div class="tools">${MAGNETS.map(m => `<button class="fr-m" data-m="${m}">${m}</button>`).join('')}</div>`;
+            panel.onclick = e => { const b = e.target.closest('.fr-m'); if (b) { add('magnet', b.dataset.m); replay(b, 'pump'); } };
+          },
+          let() {
+            panel.innerHTML = `<div class="us-row fr-row"><input id="frLin" maxlength="16" placeholder="ЛЮБЛЮ" autocapitalize="characters"><button class="btn btn-sm" id="frLadd">Прилепить</button></div>`;
+            panel.onclick = null;
+            $('#frLadd').onclick = async () => { const t = $('#frLin').value.trim().toUpperCase(); if (!t) { replay($('#frLin'), 'shake'); return; } if (await add('letters', t)) $('#frLin').value = ''; };
+          },
+          ph() {
+            let shape = 'polaroid', img = null;
+            panel.innerHTML = `<div class="sa-chips fr-shapes">${SHAPES.map(([k, e, n], i) => `<button data-s="${k}" aria-pressed="${!i}">${e} ${n}</button>`).join('')}</div>
+              <div class="us-row fr-row"><div class="img-btns"><label class="chip">🖼 Галерея<input type="file" accept="image/*" hidden></label><label class="chip">📁 Файлы<input type="file" hidden></label></div><span class="fr-phst" id="frPhSt"></span></div>`;
+            panel.onclick = e => { const b = e.target.closest('.fr-shapes button'); if (!b) return; shape = b.dataset.s; $$('.fr-shapes button').forEach(x => x.setAttribute('aria-pressed', x === b)); };
+            $$('input[type="file"]', panel).forEach(inp => inp.onchange = async () => {
+              const f = inp.files[0]; inp.value = ''; if (!f) return;
+              $('#frPhSt').textContent = '⏳';
+              try { img = (await processImage(f, 220)).image; } catch (e) { $('#frPhSt').textContent = 'Не открылось'; return; }
+              $('#frPhSt').textContent = ''; await add('photo', img, shape);
+            });
+          },
+          note() {
+            let col = NOTE_COL[0];
+            panel.innerHTML = `<input id="frNin" maxlength="80" placeholder="Коротко, на стикер"><div class="us-row fr-row"><div class="fr-cols">${NOTE_COL.map((c, i) => `<button data-c="${c}" style="background:${c}" aria-pressed="${!i}"></button>`).join('')}</div><button class="btn btn-sm" id="frNadd">Прилепить</button></div>`;
+            panel.onclick = e => { const b = e.target.closest('.fr-cols button'); if (!b) return; col = b.dataset.c; $$('.fr-cols button').forEach(x => x.setAttribute('aria-pressed', x === b)); };
+            $('#frNadd').onclick = async () => { const t = $('#frNin').value.trim(); if (!t) { replay($('#frNin'), 'shake'); return; } if (await add('note', t, col)) $('#frNin').value = ''; };
+          },
+        };
+        $('#frModes').onclick = e => { const b = e.target.closest('button'); if (!b) return; $$('#frModes button').forEach(x => x.setAttribute('aria-pressed', x === b)); modes[b.dataset.m](); buzz(5); };
+        modes.mag();
         board.onpointerdown = e => { if (e.target === board && armed) { armed.classList.remove('armed'); armed = null; } };
         sync(true);
       },

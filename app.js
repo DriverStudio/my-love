@@ -1177,7 +1177,7 @@ $('#logout').onclick = () => { store.set('adm', null); location.reload(); };
 let memCache = [], memLoading = null;
 function preloadMemories() {
   if (memLoading) return memLoading;
-  memLoading = db('memories?select=image,caption&order=id.desc&limit=16').then(rows => Promise.all(rows.map(async r => {
+  memLoading = db('memories?select=image,caption&order=id.desc&limit=12').then(rows => Promise.all(rows.map(async r => {
     const img = new Image(); img.src = r.image;
     try { await img.decode(); memCache.push({ img, caption: r.caption }); } catch (e) {}
   }))).catch(e => console.error(e));

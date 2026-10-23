@@ -447,7 +447,7 @@
         <section class="sa-sec"><h4>Финальное письмо</h4>
           <label class="field"><span>Откроется ей в день дембеля</span><textarea id="saFinal" rows="5">${esc(c.final_letter)}</textarea></label>
         </section>
-        <button class="btn sa-save" id="saSave">Сохранить</button>
+        <button class="btn sa-save" id="saSave" hidden>💾 Сохранить изменения</button>
       </div>`;
 
     let frameImg; // undefined — не трогаем, '' — убрать, строка — новое фото
@@ -457,11 +457,14 @@
       try {
         frameImg = (await processImage(f, 260)).image;
         $('#saFprev').innerHTML = `<img src="${frameImg}" alt="">`; $('#saFdel').hidden = false;
-        $('#saFcap').textContent = 'Нажми «Сохранить» внизу'; setFrame(prev, frameImg); replay($('#saFprev'), 'pop-in');
+        $('#saFcap').textContent = 'Не забудь сохранить'; setFrame(prev, frameImg); replay($('#saFprev'), 'pop-in'); dirty();
       } catch (e) { console.error(e); $('#saFcap').textContent = 'Не открылось, попробуй другое фото'; }
     });
-    $('#saFdel').onclick = () => { frameImg = ''; $('#saFprev').innerHTML = '<span>💗</span>'; $('#saFdel').hidden = true; $('#saFcap').textContent = 'Нажми «Сохранить» внизу'; setFrame(prev, null); };
+    $('#saFdel').onclick = () => { frameImg = ''; $('#saFprev').innerHTML = '<span>💗</span>'; $('#saFdel').hidden = true; $('#saFcap').textContent = 'Не забудь сохранить'; setFrame(prev, null); };
     const prev = $('#saPrev');
+    const dirty = () => { const b = $('#saSave'); if (b.hidden) { b.hidden = false; replay(b, 'pop-in'); } };
+    box.addEventListener('input', dirty);
+    box.addEventListener('click', e => { if (e.target.closest('.sa button:not(#saSave)')) dirty(); });
     const showLook = () => { prev.style.setProperty('--skin', SKIN[look.skin]); prev.style.setProperty('--hair', look.hair); prev.style.setProperty('--eyes', look.eyes);
       prev.dataset.hair = look.style; prev.dataset.glasses = look.glasses ? 1 : 0; prev.dataset.stubble = look.stubble ? 1 : 0; prev.dataset.st = status; };
     showLook(); setFrame(prev, c.frame_img);
@@ -479,9 +482,9 @@
       const d = { status, sign: $('#saSign').value.trim(), offline_until: $('#saOff').value, wake: $('#saWake').value || '06:00', sleep: $('#saSleep').value || '22:00',
         call_days: [...days].sort(), look, parcels: pl, reply: $('#saReply').value.trim(), final_letter: $('#saFinal').value.trim() };
       if (frameImg !== undefined) d.frame_img = frameImg;
-      try { await rpc('admin_soldier_set', { p: adminPass, d }); toast('Сохранено 🪖'); fx.at(btn, ['🫡', '✨', '💖'], 18); }
+      try { await rpc('admin_soldier_set', { p: adminPass, d }); toast('Сохранено 🪖'); fx.at(btn, ['🫡', '✨', '💖'], 18); btn.hidden = true; frameImg = undefined; }
       catch (e) { console.error(e); toast(/bad password/.test(e.message) ? 'Пароль сменился, войди заново' : 'Не сохранилось, проверь интернет'); }
-      finally { btn.disabled = false; btn.textContent = 'Сохранить'; }
+      finally { btn.disabled = false; btn.textContent = '💾 Сохранить изменения'; }
     };
   }
 
