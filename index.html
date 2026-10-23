@@ -8,8 +8,9 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;700;800&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=17">
-<link rel="stylesheet" href="soldier.css?v=17">
+<link rel="stylesheet" href="style.css?v=19">
+<link rel="stylesheet" href="us.css?v=19">
+<link rel="stylesheet" href="soldier.css?v=19" onerror="window.onerror && window.onerror('Не нашёлся файл soldier.css', 'soldier.css', 0)">
 </head>
 <body>
 <canvas id="fx"></canvas>
@@ -149,6 +150,23 @@
     </div>
   </section>
 
+  <!-- МЫ -->
+  <section class="screen s-us" data-name="us">
+    <div class="bg"><i></i><i></i><i></i></div>
+    <div class="content">
+      <h2 data-a>Мы</h2>
+      <p class="sub" data-a>Только для нас двоих</p>
+      <div class="us-pres" id="usPres" data-a></div>
+      <div class="us-q" id="usQ" data-a></div>
+      <div class="us-tiles" data-a>
+        <button class="us-tile" data-open="diary"><i>📓</i><b>Дневник</b><small id="usSdiary">…</small><span class="badge" hidden></span></button>
+        <button class="us-tile" data-open="tasks"><i>🎯</i><b>Задания</b><small id="usStasks">…</small><span class="badge" hidden></span></button>
+        <button class="us-tile" data-open="guess"><i>🧠</i><b>Угадай меня</b><small id="usSguess">…</small><span class="badge" hidden></span></button>
+        <button class="us-tile" data-open="fridge"><i>🧲</i><b>Холодильник</b><small id="usSfridge">…</small><span class="badge" hidden></span></button>
+      </div>
+    </div>
+  </section>
+
   <!-- 7. ИГРЫ -->
   <section class="screen s-games" data-name="games">
     <div class="bg"><i></i><i></i><i></i></div>
@@ -184,6 +202,7 @@
   <button aria-label="Банка причин">💗</button>
   <button aria-label="Когда вернусь">🌴</button>
   <button aria-label="Настроение">🌈</button>
+  <button aria-label="Мы" id="navUs">💞</button>
   <button aria-label="Игры">🎮</button>
   <button aria-label="Пульт" id="navAdmin" hidden>⚙️</button>
 </nav>
@@ -212,6 +231,9 @@
   <div class="layer-body" id="layerBody"></div>
 </div>
 
+<button class="us-chip" id="usChip" hidden></button>
+<div class="knock-fx" id="knockFx" hidden><div class="knock-heart">💓</div><p id="knockText"></p></div>
+
 <div id="toast" role="status"></div>
 
 <script>
@@ -223,9 +245,10 @@
     document.body.appendChild(d);
   };
 </script>
-<script src="config.js?v=17"></script>
+<script src="config.js?v=19"></script>
 <script>if (!window.CONFIG) window.onerror('config.js не загрузился или в нём ошибка (запятая, кавычка)', 'config.js', 0);</script>
-<script src="app.js?v=17"></script>
-<script src="soldier.js?v=17"></script>
+<script src="app.js?v=19"></script>
+<script src="us.js?v=19" onerror="window.onerror('Не нашёлся файл us.js', 'us.js', 0)"></script>
+<script src="soldier.js?v=19" onerror="window.onerror('Не нашёлся файл soldier.js — проверь, что он лежит в репо рядом с index.html', 'soldier.js', 0)"></script>
 </body>
 </html>

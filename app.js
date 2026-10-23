@@ -180,9 +180,10 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
   function enter(btn, chars, pt) {
     const r = btn.getBoundingClientRect(), x = pt ? pt[0] : r.left + r.width / 2, y = pt ? pt[1] : r.top + r.height / 2;
     fx.burst(x, y, chars, 60, 1.4); buzz(30);
-    if (isAdmin) { $('#suggest').hidden = true; $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 8); initAdmin(); loadPlans(); }
+    if (isAdmin) { $('#suggest').hidden = true; $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 9); initAdmin(); loadPlans(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
     go(0, x, y);
+    document.dispatchEvent(new Event('entered'));
     setTimeout(() => $('#nav').classList.add('on'), 700);
   }
   /* --- вопрос на входе для неё --- */
@@ -503,7 +504,10 @@ async function loadMood() {
 const GAMES = {};
 $$('.game').forEach(g => g.onclick = () => {
   const game = GAMES[g.dataset.game];
-  if (!game) { replay($('i', g), 'wiggle'); fx.at(g, ['✨', '🎮'], 12); toast('Скоро открою 😉'); return; }
+  if (!game) {
+    replay($('i', g), 'wiggle');
+    toast(g.dataset.game ? 'Игра не загрузилась. Обнови страницу' : 'Скоро открою 😉'); return;
+  }
   fx.at(g, ['✨', '🎨', '💖'], 16); buzz(15); openLayer(game);
 });
 let layerGame = null;
