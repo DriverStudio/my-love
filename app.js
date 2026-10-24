@@ -1070,6 +1070,7 @@ function openSheet(row) {
     else if (type === 'select') el.value = row ? row[k] : k === 'cols' ? '4' : SELECTS[k][0][0];
     else el.value = row ? (row[k] ?? '') : type === 'date' && !opt ? defaultDate(k) : '';
   });
+  if (!row && NOTIFY[admTab]) $('#sheetFields').insertAdjacentHTML('beforeend', '<label class="chk nf-chk"><input type="checkbox" id="sheetNotify" checked><span>🔔 Уведомить её</span></label>');
   const del = $('#sheetDel'); del.hidden = !row; del.classList.remove('arm'); del.textContent = 'Удалить';
   sheet.showModal();
 }
@@ -1099,6 +1100,15 @@ function initPalette(input, current) {
   const pal = fill();
   pick(current && /^#[0-9a-f]{6}$/i.test(current) ? current : pal[0]);
 }
+// тексты ручных уведомлений, когда ты добавляешь что-то в пульте
+const NOTIFY = {
+  puzzles: ['🧩', d => d.opens_at && d.opens_at > dateIn(Date.now()) ? `Новый пазл ждёт тебя, откроется ${fmtDate(d.opens_at)} 🔒` : 'Появился новый пазл!' + (d.hint ? ` «${d.hint}»` : '')],
+  memories: ['📸', () => 'Новое воспоминание, оно уже летает при входе ✨'],
+  letters: ['💌', d => d.open_at > dateIn(Date.now()) ? `Новое письмо «${d.title}», откроется ${fmtDate(d.open_at)}` : `Новое письмо «${d.title}», можно открыть!`],
+  reasons: ['💗', () => 'В банке причин появилась новая. Тряхни её!'],
+  plans: ['🌴', d => `Новый план на после дембеля: «${d.text}»`],
+  notes: ['📝', d => d.show_on && d.show_on <= dateIn(Date.now()) ? 'Записка дня обновлена' : null],
+};
 let pendingImg = null;
 function initImagePick(row) {
   pendingImg = null;
@@ -1159,6 +1169,8 @@ $('#sheetSave').onclick = async () => {
   const btn = $('#sheetSave'); btn.disabled = true; btn.textContent = data.image ? 'Загружаю…' : 'Сохраняю…';
   try {
     await rpc('admin_save', { p: adminPass, tbl: admTab, row_id: editing ? editing.id : null, d: data });
+    const nf = $('#sheetNotify');
+    if (!editing && nf && nf.checked) { const [ic, f] = NOTIFY[admTab], txt = f(data); if (txt) rpc('admin_notify', { p: adminPass, ic, txt }).catch(e => console.error(e)); }
     await afterChange(editing ? 'Сохранено' : 'Добавлено');
   } catch (e) { console.error(e); toast(errMsg(e)); }
   finally { btn.disabled = false; btn.textContent = 'Сохранить'; }

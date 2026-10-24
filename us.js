@@ -42,6 +42,7 @@
         const was = pres.online; pres = r || pres;
         if (!was && pres.online) toast(`${Other()} сейчас здесь 💫`);
         if (r && r.knocks) knocked(r.knocks);
+        document.dispatchEvent(new CustomEvent('us-ping', { detail: r }));
         renderPres();
       } catch (e) { console.error(e); }
     }
