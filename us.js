@@ -195,9 +195,47 @@
   };
 
   /* ================= 5. ЗАДАНИЯ ================= */
+  /* --- 🤫 пин-код на задания (раз в 3 часа) --- */
+  const PIN_KEY = () => 'tasksPin' + (isAdmin ? 'he' : 'she'), PIN_TTL = 3 * 3600e3;
+  const savedPin = () => { const v = store.get(PIN_KEY()); return v && v.until > Date.now() ? v.pin : null; };
+  function pinLock(root, onOk) {
+    let code = '';
+    root.innerHTML = `<div class="pin">
+      <div class="pin-emoji">🤫</div>
+      <p class="pin-title">Только ты можешь знать, что тут</p>
+      <p class="pin-sub">Введи пин-код</p>
+      <div class="pin-dots">${'<i></i>'.repeat(4)}</div>
+      <div class="pin-pad">${[1, 2, 3, 4, 5, 6, 7, 8, 9, '', 0, '⌫'].map(k => k === '' ? '<span></span>' : `<button data-k="${k}">${k}</button>`).join('')}</div></div>`;
+    const dots = $$('.pin-dots i', root), box = $('.pin-dots', root);
+    const paint = () => dots.forEach((d, i) => d.classList.toggle('on', i < code.length));
+    $('.pin-pad', root).onclick = async e => {
+      const b = e.target.closest('button'); if (!b || box.classList.contains('busy')) return;
+      const k = b.dataset.k; buzz(5); b.classList.add('tap'); setTimeout(() => b.classList.remove('tap'), 160);
+      if (k === '⌫') code = code.slice(0, -1); else if (code.length < 4) code += k;
+      paint();
+      if (code.length < 4) return;
+      box.classList.add('busy');
+      let ok = false;
+      try { ok = await rpc('tasks_check', { pin: code }); }
+      catch (er) { toast(/locked/.test(er.message) ? 'Слишком много попыток, подожди 10 минут' : 'Нет связи, попробуй ещё раз'); }
+      if (ok) {
+        box.classList.add('ok'); navigator.vibrate && navigator.vibrate([15, 40, 25]);
+        store.set(PIN_KEY(), { pin: code, until: Date.now() + PIN_TTL });
+        const pin = code; setTimeout(() => { $('.pin', root) && $('.pin', root).classList.add('open'); setTimeout(() => onOk(pin), 380); }, 350);
+      } else {
+        box.classList.add('bad'); navigator.vibrate && navigator.vibrate(120);
+        setTimeout(() => { box.classList.remove('bad', 'busy'); code = ''; paint(); }, 600);
+      }
+    };
+  }
+
   const Tasks = {
     title: 'Задания',
-    async open(root) {
+    open(root) {
+      const pin = savedPin();
+      if (pin) Tasks.show(root, pin); else pinLock(root, p => Tasks.show(root, p));
+    },
+    async show(root, pin) {
       root.innerHTML = `<div class="us-scroll">
         <div class="us-form"><p class="us-ftitle">Дать задание ${her_him()}</p>
           <textarea id="tNew" rows="2" maxlength="300" placeholder="${isAdmin ? 'Сходи в нашу кофейню и сфоткай наш столик' : 'Нарисуй меня на листке и покажи'}"></textarea>
@@ -210,7 +248,11 @@
       };
       const load = async () => {
         let rows;
-        try { rows = await db('tasks?select=*&order=id.desc&limit=60'); } catch (e) { fail($('#tList')); return; }
+        try { rows = await call('tasks_list', { pin }); }
+        catch (e) {
+          if (/bad pin/.test(e.message)) { store.set(PIN_KEY(), null); pinLock(root, p => Tasks.show(root, p)); return; } // пин сменили
+          fail($('#tList')); return;
+        }
         const box = $('#tList'); if (!box) return;
         const toMe = rows.filter(r => r.from_who !== me()), fromMe = rows.filter(r => r.from_who === me());
         const ST = { open: '⏳ ждёт', done: '✅ выполнено', accepted: '💗 принято' };
@@ -453,47 +495,18 @@
     };
   })();
 
-  /* ================= 🎡 «колесо» как будильник на айфоне =================
-     Карточки в середине — ровные и яркие; уходя вверх, они заваливаются назад
-     и тускнеют, снизу — выплывают из глубины. Плюс лёгкий «щелчок» на каждой. */
-  function wheel(sc) {
-    if (sc._wheel) return sc._wheel();
-    sc.classList.add('wheel');
-    let raf = 0, active = null;
-    const update = () => {
-      raf = 0;
-      const r = sc.getBoundingClientRect(); if (!r.height) return;
-      const top = r.top + r.height * .16, bot = r.bottom - r.height * .2, span = r.height * .38, mid = r.top + r.height * .45;
-      let best = null, bestD = 1e9;
-      $$('.us-card', sc).forEach(c => {
-        const b = c.getBoundingClientRect(), y = b.top + b.height / 2;
-        let d = 0;
-        if (b.bottom < top + b.height * .5) d = (b.bottom - top - b.height * .5) / span;   // уходит вверх
-        else if (b.top > bot - b.height * .5) d = (b.top - bot + b.height * .5) / span;  // приходит снизу
-        d = Math.max(-1, Math.min(1, d));
-        const a = Math.abs(d);
-        c.style.transformOrigin = d < 0 ? '50% 100%' : '50% 0%';
-        c.style.transform = a ? `perspective(900px) translateZ(${-a * 90}px) rotateX(${-d * 48}deg) scale(${1 - a * .1})` : '';
-        c.style.opacity = a ? 1 - a * .7 : '';
-        c.style.filter = a > .15 ? `saturate(${1 - a * .5})` : '';
-        const dm = Math.abs(y - mid); if (dm < bestD) { bestD = dm; best = c; }
-      });
-      if (best !== active) {
-        if (active) active.classList.remove('focus');
-        if (best) best.classList.add('focus');
-        if (active && best && sc._touched) buzz(3); // «щелчок» колеса
-        active = best;
-      }
-    };
-    const req = () => { if (!raf) raf = requestAnimationFrame(update); };
-    sc.addEventListener('scroll', req, { passive: true });
-    sc.addEventListener('touchstart', () => sc._touched = true, { passive: true });
-    sc.addEventListener('load', req, true); // догрузились картинки
-    sc._wheel = req; req();
-    return req;
+  /* ================= ✨ лёгкое появление карточек =================
+     Карточка мягко всплывает, когда доходит до экрана. Без наклонов и щелчков. */
+  function reveal(sc) {
+    if (!sc._io) {
+      sc.classList.add('reveal');
+      sc._io = new IntersectionObserver(es => es.forEach(e => {
+        if (e.isIntersecting) { e.target.classList.add('seen'); sc._io.unobserve(e.target); }
+      }), { root: sc, threshold: .12 });
+    }
+    $$('.us-card:not(.seen):not([data-io])', sc).forEach(c => { c.dataset.io = 1; sc._io.observe(c); });
   }
-  // сами находим все ленты в окнах и включаем им колесо
-  new MutationObserver(() => requestAnimationFrame(() => $$('#layerBody .us-scroll').forEach(wheel)))
+  new MutationObserver(() => requestAnimationFrame(() => $$('#layerBody .us-scroll').forEach(reveal)))
     .observe($('#layerBody'), { childList: true, subtree: true });
 
   /* ================= экран «Мы» ================= */
