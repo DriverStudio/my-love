@@ -176,3 +176,11 @@
 .nf-status span { width: 44px; color: #C7B4F0; font-weight: 700; font-size: .85rem; }
 .nf-status b { flex: 1; font-size: .9rem; } .nf-status b.ok { color: #3CDB8E; }
 .nf-status .link { align-self: flex-start; padding-left: 0; }
+
+/* 🎡 колесо: карточки едут по дуге */
+.us-scroll.wheel { scroll-snap-type: y proximity; scroll-padding-top: 30%; }
+.us-scroll.wheel::after { content: ""; flex: 0 0 26vh; } /* последняя карточка тоже может доехать до центра */
+.us-scroll.wheel .us-card { scroll-snap-align: center; animation-fill-mode: backwards; will-change: transform, opacity;
+  transition: box-shadow .35s, border-color .35s, background .35s; }
+.us-scroll.wheel .us-card.focus { border-color: rgba(255,255,255,.32); background: rgba(255,255,255,.12);
+  box-shadow: 0 18px 40px -18px rgba(255,61,139,.55), inset 0 1px 0 rgba(255,255,255,.12); }

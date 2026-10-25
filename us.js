@@ -175,7 +175,7 @@
           c.className = 'us-card d-card' + (mine ? ' mine' : ''); c.style.animationDelay = i * 40 + 'ms';
           c.innerHTML = `<div class="us-who"><b>${label(r.who)}</b><small>${when(r.created_at)}</small>${mine ? '<button class="us-x" aria-label="Удалить">✕</button>' : ''}</div>
             ${r.img ? `<img class="d-img" src="${r.img}" alt="">` : ''}${r.body ? `<p class="d-body"></p>` : ''}
-            <div class="d-react">${mine ? (r.reaction ? `<span class="d-got">${esc(r.reaction)} от ${other()}</span>` : `<small>${other()} ещё не отреагировал${isAdmin ? 'а' : ''}</small>`)
+            <div class="d-react">${mine ? (r.reaction ? `<span class="d-got">${esc(r.reaction)} от ${isAdmin ? 'неё' : 'него'}</span>` : `<small>${other()} ещё не отреагировал${isAdmin ? 'а' : ''}</small>`)
               : REACTS.map(e => `<button data-e="${e}" aria-pressed="${r.reaction === e}">${e}</button>`).join('')}</div>`;
           if (r.body) $('.d-body', c).textContent = r.body;
           if (mine) armBtn($('.us-x', c), 'Удалить?', async () => { try { await call('diary_del', { pid: r.id }); c.remove(); } catch (e) { toast(errText(e)); } });
@@ -452,6 +452,49 @@
       close() { clearTimeout(timer); board = null; },
     };
   })();
+
+  /* ================= 🎡 «колесо» как будильник на айфоне =================
+     Карточки в середине — ровные и яркие; уходя вверх, они заваливаются назад
+     и тускнеют, снизу — выплывают из глубины. Плюс лёгкий «щелчок» на каждой. */
+  function wheel(sc) {
+    if (sc._wheel) return sc._wheel();
+    sc.classList.add('wheel');
+    let raf = 0, active = null;
+    const update = () => {
+      raf = 0;
+      const r = sc.getBoundingClientRect(); if (!r.height) return;
+      const top = r.top + r.height * .16, bot = r.bottom - r.height * .2, span = r.height * .38, mid = r.top + r.height * .45;
+      let best = null, bestD = 1e9;
+      $$('.us-card', sc).forEach(c => {
+        const b = c.getBoundingClientRect(), y = b.top + b.height / 2;
+        let d = 0;
+        if (b.bottom < top + b.height * .5) d = (b.bottom - top - b.height * .5) / span;   // уходит вверх
+        else if (b.top > bot - b.height * .5) d = (b.top - bot + b.height * .5) / span;  // приходит снизу
+        d = Math.max(-1, Math.min(1, d));
+        const a = Math.abs(d);
+        c.style.transformOrigin = d < 0 ? '50% 100%' : '50% 0%';
+        c.style.transform = a ? `perspective(900px) translateZ(${-a * 90}px) rotateX(${-d * 48}deg) scale(${1 - a * .1})` : '';
+        c.style.opacity = a ? 1 - a * .7 : '';
+        c.style.filter = a > .15 ? `saturate(${1 - a * .5})` : '';
+        const dm = Math.abs(y - mid); if (dm < bestD) { bestD = dm; best = c; }
+      });
+      if (best !== active) {
+        if (active) active.classList.remove('focus');
+        if (best) best.classList.add('focus');
+        if (active && best && sc._touched) buzz(3); // «щелчок» колеса
+        active = best;
+      }
+    };
+    const req = () => { if (!raf) raf = requestAnimationFrame(update); };
+    sc.addEventListener('scroll', req, { passive: true });
+    sc.addEventListener('touchstart', () => sc._touched = true, { passive: true });
+    sc.addEventListener('load', req, true); // догрузились картинки
+    sc._wheel = req; req();
+    return req;
+  }
+  // сами находим все ленты в окнах и включаем им колесо
+  new MutationObserver(() => requestAnimationFrame(() => $$('#layerBody .us-scroll').forEach(wheel)))
+    .observe($('#layerBody'), { childList: true, subtree: true });
 
   /* ================= экран «Мы» ================= */
   const OPEN = { diary: Diary, tasks: Tasks, guess: Guess, fridge: Fridge };
