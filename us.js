@@ -582,6 +582,107 @@
   new MutationObserver(() => requestAnimationFrame(() => $$('#layerBody .us-scroll').forEach(reveal)))
     .observe($('#layerBody'), { childList: true, subtree: true });
 
+  /* ================= 🎰 казино (как слот в Telegram) ================= */
+  const SYM = ['🍒', '🍋', '🍇', '7️⃣', '💗'];
+  GAMES.casino = (() => {
+    let root, timer = 0, lastId = 0, spinning = false, here = false;
+    const H = () => $('.cs-reel', root).clientHeight;
+    const whoName = w => (w === me() ? 'Ты' : w === 'he' ? 'Он' : 'Она');
+    function verdict(r, w) {
+      const same3 = r[0] === r[1] && r[1] === r[2], same2 = r[0] === r[1] || r[1] === r[2] || r[0] === r[2];
+      if (same3 && r[0] === 3) return ['jack', `ДЖЕКПОТ 777! 🎉 ${whoName(w)} загадыва${w === me() ? 'ешь' : 'ет'} желание`];
+      if (same3 && r[0] === 4) return ['love', 'Тройная любовь 💗💗💗 Обнимашки вне очереди!'];
+      if (same3) return ['win', 'Три в ряд! Победа 🏆'];
+      if (same2) return ['near', 'Почти! Ещё разок 😉'];
+      return ['miss', 'Мимо… крути ещё'];
+    }
+    function setStatic(reels) {
+      $$('.cs-strip', root).forEach((st, i) => { st.style.transition = 'none'; st.style.transform = 'translateY(0)'; st.innerHTML = `<span>${SYM[reels[i]]}</span>`; });
+    }
+    function animate(reels, w) {
+      spinning = true; paintBtn();
+      const h = H(); let doneN = 0;
+      $('#csMsg').textContent = `${whoName(w)} крут${w === me() ? 'ишь' : 'ит'}…`; $('#csMsg').className = 'cs-msg';
+      $('.cs-machine', root).classList.add('go');
+      $$('.cs-strip', root).forEach((st, i) => {
+        const n = 22 + i * 7, cur = st.textContent.trim() || SYM[0];
+        const list = [cur, ...Array.from({ length: n - 2 }, () => SYM[Math.floor(Math.random() * SYM.length)]), SYM[reels[i]]];
+        st.style.transition = 'none'; st.style.transform = 'translateY(0)';
+        st.innerHTML = list.map(x => `<span>${x}</span>`).join('');
+        void st.offsetHeight;
+        const dur = 1300 + i * 450;
+        st.style.transition = `transform ${dur}ms cubic-bezier(.12,.75,.22,1.04)`;
+        st.style.transform = `translateY(${-(list.length - 1) * h}px)`;
+        setTimeout(() => {
+          buzz(12); replay($$('.cs-reel', root)[i], 'stop');
+          if (++doneN === 3) finish(reels, w);
+        }, dur);
+      });
+    }
+    function finish(reels, w) {
+      setStatic(reels); spinning = false; paintBtn();
+      $('.cs-machine', root).classList.remove('go');
+      const [k, txt] = verdict(reels, w), m = $('#csMsg');
+      m.textContent = txt; m.className = 'cs-msg ' + k;
+      const box = $('.cs-reels', root);
+      if (k === 'jack') { navigator.vibrate && navigator.vibrate([60, 60, 60, 60, 200]); [0, 1, 2, 3].forEach(i => setTimeout(() => fx.at(box, ['7️⃣', '🎉', '💰', '✨'], 40, 1.4), i * 220)); }
+      else if (k === 'love') { navigator.vibrate && navigator.vibrate([40, 50, 120]); fx.at(box, ['💗', '💖', '💞'], 50, 1.3); }
+      else if (k === 'win') { buzz(40); fx.at(box, ['🏆', '✨', '🎉'], 30, 1.1); }
+      else if (k === 'near') fx.at(box, ['✨'], 8, .6);
+      if (k !== 'miss' && k !== 'near') replay($('.cs-machine', root), 'cs-win');
+    }
+    function paintBtn() {
+      const b = $('#csSpin'); if (!b) return;
+      b.disabled = spinning || !here;
+      b.textContent = spinning ? 'Крутится…' : here ? 'Крутить 🎰' : `Ждём ${isAdmin ? 'её' : 'его'} за столом…`;
+      $('#csInvite').hidden = here;
+      $('#csWho').innerHTML = `<span class="on">● Ты за столом</span><span class="${here ? 'on' : ''}">● ${Other()} ${here ? 'за столом' : 'не за столом'}</span>`;
+    }
+    function paintInfo(st) {
+      const S = st.stats || {}, mine = S[me()] || {}, th = S[me() === 'he' ? 'she' : 'he'] || {};
+      $('#csStats').innerHTML = `<div><b>${mine.jack || 0} : ${th.jack || 0}</b><small>джекпоты (ты : ${other()})</small></div><div><b>${mine.win || 0} : ${th.win || 0}</b><small>три в ряд</small></div><div><b>${(mine.total || 0) + (th.total || 0)}</b><small>прокрутов вместе</small></div>`;
+      $('#csHist').innerHTML = (st.spins || []).slice(0, 8).map(x => `<div><span>${x.reels.map(i => SYM[i]).join('')}</span><small>${whoName(x.who)}, ${new Date(x.created_at).toLocaleTimeString('ru-RU', { hour: '2-digit', minute: '2-digit' })}</small></div>`).join('') || '<p class="err">Ещё никто не крутил</p>';
+    }
+    async function poll(first) {
+      clearTimeout(timer);
+      if (!root || !$('#csSpin')) return;
+      try {
+        const st = await call('casino_state');
+        const wasHere = here; here = !!st.other_here;
+        if (!wasHere && here && !first) { toast(`${Other()} за столом! Можно крутить 🎰`); buzz(20); }
+        const top = (st.spins || [])[0];
+        if (first) { lastId = top ? top.id : 0; if (top) setStatic(top.reels); }
+        else if (top && top.id > lastId && !spinning) { lastId = top.id; animate(top.reels, top.who); }
+        paintBtn(); paintInfo(st);
+      } catch (e) { console.error(e); }
+      timer = setTimeout(poll, document.hidden ? 6000 : 1800);
+    }
+    return {
+      title: 'Казино',
+      open(r) {
+        root = r; here = false; spinning = false;
+        r.innerHTML = `<div class="us-scroll cs">
+          <div class="cs-who" id="csWho"></div>
+          <div class="cs-machine"><div class="cs-lights"></div><div class="cs-top">🎰 Любовное казино</div>
+            <div class="cs-reels">${[0, 1, 2].map(() => '<div class="cs-reel"><div class="cs-strip"><span>🎰</span></div></div>').join('')}</div>
+            <p class="cs-msg" id="csMsg">Крутить можно только вдвоём 💗</p></div>
+          <button class="btn cs-spin" id="csSpin" disabled>…</button>
+          <button class="link cs-inv" id="csInvite">📣 Позвать ${isAdmin ? 'её' : 'его'}</button>
+          <div class="cs-stats" id="csStats"></div>
+          <p class="us-sec">Последние прокруты</p><div class="cs-hist" id="csHist"></div></div>`;
+        $('#csSpin').onclick = async () => {
+          if (spinning) return;
+          spinning = true; paintBtn(); buzz(20);
+          try { const res = await call('casino_spin'); lastId = res.id; animate(res.reels, me()); }
+          catch (e) { spinning = false; paintBtn(); toast(/alone/.test(e.message) ? `${Other()} вышел${isAdmin ? 'а' : ''} из-за стола` : /busy/.test(e.message) ? 'Секунду, барабаны ещё крутятся' : errText(e)); }
+        };
+        $('#csInvite').onclick = async () => { try { await call('casino_invite'); toast(`Позвал${isAdmin ? '' : 'а'} 📣`); } catch (e) { toast(errText(e)); } };
+        paintBtn(); poll(true);
+      },
+      close() { clearTimeout(timer); root = null; },
+    };
+  })();
+
   /* ================= ☀️🌙 ритуал «доброе утро / спокойной ночи» ================= */
   let ritStreak = null;
   async function renderRit() {
