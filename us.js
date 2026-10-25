@@ -229,6 +229,42 @@
     };
   }
 
+  /* --- свайп карточки вправо: под ней кнопки действий --- */
+  function swipeable(wrap, card, actW) {
+    let sx = 0, sy = 0, dx = 0, base = 0, pid = null, lock = null, open = false, dragged = 0;
+    const set = (x, anim) => { card.style.transition = anim ? 'translate .38s cubic-bezier(.2,.9,.3,1.12)' : 'none'; card.style.translate = x + 'px 0'; };
+    const close = () => { open = false; set(0, true); wrap.classList.remove('open'); setTimeout(() => { if (!open) wrap.classList.remove('swiping'); }, 380); };
+    wrap._close = close;
+    card.addEventListener('pointerdown', e => {
+      if (e.target.closest('button, textarea, input, label, .t-ph')) return;
+      pid = e.pointerId; sx = e.clientX; sy = e.clientY; lock = null; base = open ? actW : 0; dx = base;
+    });
+    card.addEventListener('pointermove', e => {
+      if (pid !== e.pointerId) return;
+      const mx = e.clientX - sx, my = e.clientY - sy;
+      if (!lock) {
+        if (Math.abs(mx) > 8 && Math.abs(mx) > Math.abs(my) * 1.3) {
+          lock = 'x'; card.setPointerCapture(pid); wrap.classList.add('swiping');
+          $$('.t-swipe.open').forEach(w => w !== wrap && w._close && w._close());
+        } else if (Math.abs(my) > 8) { lock = 'y'; pid = null; return; } else return;
+      }
+      dx = base + mx;
+      set(dx < 0 ? dx * .25 : dx > actW ? actW + (dx - actW) * .25 : dx, false); // резинка на краях
+    });
+    const end = e => {
+      if (pid !== e.pointerId) return; pid = null;
+      if (lock !== 'x') return;
+      dragged = Date.now(); // клик, который браузер пришлёт сразу после свайпа, игнорируем
+      open = dx > actW * .4; set(open ? actW : 0, true); wrap.classList.toggle('open', open);
+      if (open) { buzz(6); store.set('tSwiped', 1); const h = $('.t-hint'); if (h) h.remove(); } else setTimeout(() => { if (!open) wrap.classList.remove('swiping'); }, 380);
+    };
+    card.addEventListener('pointerup', end); card.addEventListener('pointercancel', end);
+    card.addEventListener('click', e => {
+      if (Date.now() - dragged < 350) { e.stopPropagation(); e.preventDefault(); return; }
+      if (open && !e.target.closest('button')) { e.stopPropagation(); e.preventDefault(); close(); }
+    }, true);
+  }
+
   const Tasks = {
     title: 'Задания',
     open(root) {
@@ -256,37 +292,74 @@
         const box = $('#tList'); if (!box) return;
         const toMe = rows.filter(r => r.from_who !== me()), fromMe = rows.filter(r => r.from_who === me());
         const ST = { open: '⏳ ждёт', done: '✅ выполнено', accepted: '💗 принято' };
+        const reload = () => load();
+        const act$ = async (fn, args, ok) => { try { await call(fn, { tid: args.id, ...args.x }); if (ok) toast(ok); reload(); } catch (er) { toast(/too soon/.test(er.message) ? 'Уже напоминал' + (isAdmin ? '' : 'а') + ' недавно, подожди часик' : errText(er)); } };
         const card = (r, mineTask) => {
-          const c = document.createElement('div'); c.className = 'us-card t-card st-' + r.status;
-          c.innerHTML = `<div class="us-who"><b>${esc(ST[r.status])}</b><small>${when(r.created_at)}</small>${mineTask && r.status !== 'accepted' ? '<button class="us-x">✕</button>' : ''}</div>
+          const wrap = document.createElement('div'); wrap.className = 't-swipe';
+          const c = document.createElement('div'); c.className = 'us-card t-card st-' + r.status + (r.pinned ? ' pinned' : '');
+          c.innerHTML = `<div class="us-who"><b>${esc(ST[r.status])}</b><small>${when(r.created_at)}</small>${r.pinned ? '<span class="t-pin">📌</span>' : ''}</div>
             <p class="t-title"></p>
-            ${r.status !== 'open' ? `<div class="t-proof">${r.proof_img ? `<img src="${r.proof_img}" alt="">` : ''}${r.proof_text ? '<p></p>' : ''}</div>` : ''}
+            ${r.status !== 'open' ? `<div class="t-proof">${r.proof_img ? `<div class="t-ph ${r.spoiler ? 'spoil' : ''}"><img src="${r.proof_img}" alt="">${r.spoiler ? '<span class="t-spoil">🫣 Нажми, чтобы посмотреть</span>' : ''}</div>` : ''}${r.proof_text ? '<p></p>' : ''}</div>` : ''}
             <div class="t-act"></div>`;
           $('.t-title', c).textContent = r.title;
           if (r.proof_text) $('.t-proof p', c).textContent = r.proof_text;
+          const ph = $('.t-ph.spoil', c); if (ph) ph.onclick = () => { ph.classList.add('shown'); buzz(8); };
           const act = $('.t-act', c);
           if (!mineTask && r.status === 'open') {
             act.innerHTML = '<button class="btn btn-sm">✓ Выполнить</button>';
             $('button', act).onclick = () => {
               let pimg = null;
-              act.innerHTML = `<div class="us-form"><div class="t-pick"></div><textarea rows="2" maxlength="300" placeholder="Пара слов (необязательно)"></textarea>
+              act.innerHTML = `<div class="us-form"><div class="t-pick"></div><label class="chk t-spchk"><input type="checkbox"><span>🫣 Фото под спойлер</span></label>
+                <textarea rows="2" maxlength="300" placeholder="Пара слов (необязательно)"></textarea>
                 <div class="us-row"><span></span><button class="btn btn-sm">Готово ✅</button></div></div>`;
               photoPicker($('.t-pick', act), v => pimg = v);
               $('.btn', act).onclick = async e => {
                 e.currentTarget.disabled = true;
-                try { await call('task_done', { tid: r.id, pimg, txt: $('textarea', act).value }); toast('Отправлено на проверку ✅'); fx.at(c, ['✅', '💗', '✨'], 22); load(); }
-                catch (er) { toast(errText(er)); e.currentTarget.disabled = false; }
+                try {
+                  await call('task_done', { tid: r.id, pimg, txt: $('textarea', act).value });
+                  if (pimg && $('.t-spchk input', act).checked) await call('task_spoiler', { tid: r.id, v: true });
+                  toast('Отправлено на проверку ✅'); fx.at(c, ['✅', '💗', '✨'], 22); reload();
+                } catch (er) { toast(errText(er)); e.currentTarget.disabled = false; }
               };
             };
           }
           if (mineTask && r.status === 'done') {
             act.innerHTML = '<button class="btn btn-sm">Принять 💗</button>';
-            $('button', act).onclick = async () => { try { await call('task_accept', { tid: r.id }); fx.at(c, ['💗', '🎉', '✨'], 26); buzz(20); load(); } catch (er) { toast(errText(er)); } };
+            $('button', act).onclick = async () => { try { await call('task_accept', { tid: r.id }); fx.at(c, ['💗', '🎉', '✨'], 26); buzz(20); reload(); } catch (er) { toast(errText(er)); } };
           }
-          const x = $('.us-x', c); if (x) armBtn(x, 'Удалить?', async () => { try { await call('task_del', { tid: r.id }); load(); } catch (er) { toast(errText(er)); } });
-          return c;
+          // действия под свайпом
+          const A = [];
+          if (mineTask) {
+            if (r.status === 'open') A.push(['✏️', 'Изменить', 'edit', 'blue'], ['⏰', 'Напомнить', 'nudge', 'amber']);
+            if (r.status === 'done') A.push(['🔁', 'Переделать', 'redo', 'amber']);
+          } else if (r.status !== 'open' && r.proof_img) A.push([r.spoiler ? '👁' : '🫣', r.spoiler ? 'Без спойлера' : 'Спойлер', 'spoiler', 'violet']);
+          A.push([r.pinned ? '📍' : '📌', r.pinned ? 'Открепить' : 'Закрепить', 'pin', 'teal']);
+          if (mineTask) A.push(['🗑', 'Удалить', 'del', 'red']);
+          const acts = document.createElement('div'); acts.className = 't-actions';
+          acts.innerHTML = A.map(([e, t, k, col]) => `<button data-k="${k}" class="c-${col}"><i>${e}</i>${t}</button>`).join('');
+          acts.onclick = e => {
+            const b = e.target.closest('button'); if (!b) return; const k = b.dataset.k; buzz(8);
+            if (k === 'del') {
+              if (!b.classList.contains('arm')) { b.classList.add('arm'); $('i', b).textContent = '❓'; b.lastChild.textContent = 'Точно?'; return; }
+              return act$('task_del', { id: r.id }, 'Удалено');
+            }
+            if (k === 'pin') return act$('task_pin', { id: r.id, x: { v: !r.pinned } }, r.pinned ? 'Откреплено' : 'Закреплено 📌');
+            if (k === 'spoiler') return act$('task_spoiler', { id: r.id, x: { v: !r.spoiler } }, r.spoiler ? 'Фото открыто' : 'Фото под спойлером 🫣');
+            if (k === 'nudge') return act$('task_nudge', { id: r.id }, 'Напомнил' + (isAdmin ? '' : 'а') + ' ⏰');
+            if (k === 'redo') return act$('task_redo', { id: r.id }, 'Вернул' + (isAdmin ? '' : 'а') + ' на доработку 🔁');
+            if (k === 'edit') {
+              wrap._close();
+              const t = $('.t-title', c), old = r.title;
+              t.outerHTML = `<div class="us-form t-edit"><textarea rows="2" maxlength="300"></textarea><div class="us-row"><button class="link">Отмена</button><button class="btn btn-sm">Сохранить</button></div></div>`;
+              const f = $('.t-edit', c), ta = $('textarea', f); ta.value = old; ta.focus();
+              $('.link', f).onclick = () => reload();
+              $('.btn', f).onclick = () => { const v = ta.value.trim(); if (!v) { replay(ta, 'shake'); return; } act$('task_edit', { id: r.id, x: { t: v } }, 'Сохранено ✏️'); };
+            }
+          };
+          wrap.append(acts, c); swipeable(wrap, c, A.length * 72 + 8);
+          return wrap;
         };
-        box.innerHTML = `<p class="us-sec">${isAdmin ? 'От неё тебе' : 'От него тебе'}</p><div id="tMe"></div><p class="us-sec">Ты дал${isAdmin ? '' : 'а'} ${her_him()}</p><div id="tThem"></div>`;
+        box.innerHTML = `${store.get('tSwiped') ? '' : '<p class="us-hint t-hint">👉 Свайпни карточку вправо — там действия</p>'}<p class="us-sec">${isAdmin ? 'От неё тебе' : 'От него тебе'}</p><div id="tMe"></div><p class="us-sec">Ты дал${isAdmin ? '' : 'а'} ${her_him()}</p><div id="tThem"></div>`;
         toMe.length ? toMe.forEach(r => $('#tMe').append(card(r, false))) : $('#tMe').innerHTML = '<p class="err">Пока заданий нет</p>';
         fromMe.length ? fromMe.forEach(r => $('#tThem').append(card(r, true))) : $('#tThem').innerHTML = '<p class="err">Дай первое задание ☝️</p>';
         badges();
