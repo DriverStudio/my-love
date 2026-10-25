@@ -229,3 +229,17 @@
 .t-ph.shown .t-spoil { opacity: 0; pointer-events: none; }
 .t-spchk { margin: 0; font-size: .85rem; }
 .t-edit { margin-top: 4px; }
+
+/* ☀️🌙 ритуал */
+.rit { margin-top: 26px; padding: 16px; border-radius: 22px; background: rgba(255,255,255,.07); border: 1px solid rgba(255,255,255,.14); text-align: center; }
+.rit-streak { display: inline-flex; align-items: baseline; gap: 8px; }
+.rit-streak b { font: 800 1.6rem Unbounded, sans-serif; filter: grayscale(1); opacity: .6; }
+.rit-streak.on b { filter: none; opacity: 1; text-shadow: 0 0 18px rgba(255,140,40,.7); }
+.rit-streak small { color: var(--fg2); font-weight: 700; }
+.rit-btn { display: block; width: 100%; margin-top: 12px; padding: 14px; border-radius: 18px; font: 800 1rem Manrope, sans-serif; color: #3A1240; transition: transform .2s var(--spring), opacity .3s; }
+.rit-btn.rit-morning { background: linear-gradient(135deg, #FFE59A, #FFB38A); box-shadow: 0 12px 26px -12px rgba(255,190,90,.9); }
+.rit-btn.rit-night { background: linear-gradient(135deg, #C9B2FF, #7B5CFF); color: #fff; box-shadow: 0 12px 26px -12px rgba(123,92,255,.9); }
+.rit-btn:active { transform: scale(.96); }
+.rit-btn.done { opacity: .55; }
+.rit-sub { margin-top: 8px; font-size: .85rem; color: var(--fg2); }
+.nf-app { background: linear-gradient(135deg, rgba(255,61,139,.3), rgba(255,158,122,.25)); }

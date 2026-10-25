@@ -582,6 +582,32 @@
   new MutationObserver(() => requestAnimationFrame(() => $$('#layerBody .us-scroll').forEach(reveal)))
     .observe($('#layerBody'), { childList: true, subtree: true });
 
+  /* ================= ☀️🌙 ритуал «доброе утро / спокойной ночи» ================= */
+  let ritStreak = null;
+  async function renderRit() {
+    const box = $('#rit'); if (!box) return;
+    let r; try { r = await call('ritual_state'); } catch (e) { console.error(e); return; }
+    const h = +new Intl.DateTimeFormat('en-GB', { timeZone: C.TZ, hour: '2-digit', hour12: false }).format(new Date()) % 24;
+    const kind = h >= 5 && h < 12 ? 'morning' : h >= 20 || h < 5 ? 'night' : null;
+    const done = kind && r.mine.includes(kind), theirs = kind && r.theirs.includes(kind);
+    const grew = ritStreak != null && r.streak > ritStreak; ritStreak = r.streak;
+    box.innerHTML = `
+      <div class="rit-streak ${r.streak ? 'on' : ''}"><b>🔥 ${r.streak}</b><small>${plural(r.streak, ['день', 'дня', 'дней'])} подряд вместе</small></div>
+      ${kind ? `<button class="rit-btn rit-${kind} ${done ? 'done' : ''}" ${done ? 'disabled' : ''}>${kind === 'morning' ? '☀️ Доброе утро' : '🌙 Спокойной ночи'}${done ? ' ✓' : ''}</button>
+        <p class="rit-sub">${theirs ? `${Other()} уже пожелал${isAdmin ? 'а' : ''} 💛` : `${Other()} ещё не пожелал${isAdmin ? 'а' : ''}`}${r.today_both ? ', день засчитан 🔥' : ''}</p>`
+      : `<p class="rit-sub">${r.today_both ? 'Сегодня уже засчитано 🔥' : 'С утра — «доброе утро», вечером — «спокойной ночи». Нажмёте оба — огонёк растёт'}</p>`}`;
+    if (grew) { replay($('.rit-streak', box), 'pump'); fx.at($('.rit-streak', box), ['🔥', '✨', '💛'], 30, 1); toast(`Серия ${r.streak} ${plural(r.streak, ['день', 'дня', 'дней'])}! 🔥`); }
+    const b = $('.rit-btn', box);
+    if (b && !done) b.onclick = async () => {
+      b.disabled = true; buzz(15);
+      fx.at(b, kind === 'morning' ? ['☀️', '🌤', '💛'] : ['🌙', '⭐', '💜'], 24, .9);
+      try { await call('ritual_do', { k: kind }); } catch (e) { toast(errText(e)); b.disabled = false; return; }
+      renderRit();
+    };
+  }
+  const prevCount = onEnter.count;
+  onEnter.count = () => { prevCount && prevCount(); renderRit(); };
+
   /* ================= экран «Мы» ================= */
   const OPEN = { diary: Diary, tasks: Tasks, guess: Guess, fridge: Fridge };
   $$('.us-tile').forEach(t => t.onclick = () => { buzz(); openLayer(OPEN[t.dataset.open]); });
@@ -601,7 +627,7 @@
   $('#nav').addEventListener('click', () => setTimeout(renderPres, 50));
   new MutationObserver(renderPres).observe($('#layer'), { attributes: true, attributeFilter: ['hidden'] });
   document.addEventListener('entered', () => {
-    entered = true; ping(); badges(); renderPres();
+    entered = true; ping(); badges(); renderPres(); renderRit();
     setInterval(() => { if (!document.hidden) badges(); }, 60000);
   });
 })();

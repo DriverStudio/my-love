@@ -50,7 +50,8 @@
   const Layer = {
     title: 'Уведомления',
     async open(root) {
-      root.innerHTML = '<div class="us-scroll"><div id="nfTg"></div><div id="nfList"><p class="err">Загружаю…</p></div></div>';
+      root.innerHTML = '<div class="us-scroll"><div id="nfApp"></div><div id="nfTg"></div><div id="nfList"><p class="err">Загружаю…</p></div></div>';
+      installCard($('#nfApp'));
       let r; try { r = await rpc('notifs_list', { p: P() }); } catch (e) { fail($('#nfList')); return; }
       if (!$('#nfList')) return;
       $('.badge', bell).hidden = true; bell.classList.remove('ring');
@@ -70,6 +71,20 @@
         : '<p class="err">Пока тихо. Здесь будет всё новое 🔔</p>';
     },
   };
+
+  /* ---------- 📲 установить как приложение ---------- */
+  function installCard(box) {
+    if (isStandalone()) { box.remove(); return; }
+    const ua = navigator.userAgent, ios = /iPhone|iPad|iPod/.test(ua), tg = /Telegram/i.test(ua) || !!window.TelegramWebviewProxy;
+    let body;
+    if (installPrompt) body = '<small>Иконка на главном экране, без адресной строки, грузится мгновенно</small><div class="us-row"><span></span><button class="btn btn-sm" id="appInstall">Установить 📲</button></div>';
+    else if (tg) body = '<small>Из Telegram установить нельзя. Нажми ⋮ вверху → «Открыть в браузере», там будет кнопка установки</small>';
+    else if (ios) body = '<small>В Safari нажми «Поделиться» ⬆️ → «На экран «Домой»»</small>';
+    else body = '<small>В меню браузера ⋮ выбери «Добавить на главный экран» или «Установить приложение»</small>';
+    box.innerHTML = `<div class="nf-tg nf-app"><b>📲 Сделать приложением</b>${body}</div>`;
+    const b = $('#appInstall');
+    if (b) b.onclick = async () => { installPrompt.prompt(); const r = await installPrompt.userChoice; installPrompt = null; if (r.outcome === 'accepted') { toast('Готово! Ищи сердечко на главном экране 💗'); box.remove(); } };
+  }
 
   /* ---------- пульт: вкладка «Уведомления» ---------- */
   const ICONS = ['🔔', '💗', '🧩', '📸', '💌', '🎁', '🪖', '🌴', '✨'];

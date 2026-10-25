@@ -16,6 +16,12 @@ addEventListener('scroll', resetScroll, { passive: true });
 document.addEventListener('focusout', () => setTimeout(resetScroll, 60));
 window.visualViewport && visualViewport.addEventListener('resize', () => setTimeout(resetScroll, 120));
 
+/* сайт как приложение: кеш файлов и кнопка «установить» */
+if ('serviceWorker' in navigator && location.protocol === 'https:') addEventListener('load', () => navigator.serviceWorker.register('sw.js').catch(() => {}));
+let installPrompt = null;
+addEventListener('beforeinstallprompt', e => { e.preventDefault(); installPrompt = e; });
+const isStandalone = () => matchMedia('(display-mode: standalone)').matches || navigator.standalone === true;
+
 /* ================= helpers ================= */
 const H = { apikey: C.SUPABASE_KEY, 'Content-Type': 'application/json' };
 if (C.SUPABASE_KEY.startsWith('eyJ')) H.Authorization = 'Bearer ' + C.SUPABASE_KEY;
@@ -29,7 +35,8 @@ const rpc = (fn, args) => db('rpc/' + fn, { method: 'POST', body: JSON.stringify
 const checkPass = async p => (await rpc('check_pass', { p })) === true;
 
 async function db(path, opts = {}) {
-  const r = await fetch(`${C.SUPABASE_URL}/rest/v1/${path}`, { ...opts, headers: { ...H, ...opts.headers } });
+  const key = store.get('key'); // ключ входа: без него база ничего не отдаёт
+  const r = await fetch(`${C.SUPABASE_URL}/rest/v1/${path}`, { ...opts, headers: { ...H, ...(key ? { 'x-key': key } : {}), ...opts.headers } });
   if (!r.ok) throw new Error(r.status + ' ' + await r.text());
   const t = await r.text();
   return t ? JSON.parse(t) : null;
@@ -193,7 +200,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
   function enter(btn, chars, pt) {
     const r = btn.getBoundingClientRect(), x = pt ? pt[0] : r.left + r.width / 2, y = pt ? pt[1] : r.top + r.height / 2;
     fx.burst(x, y, chars, 60, 1.4); buzz(30);
-    if (isAdmin) { $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 9); initAdmin(); loadPlans(); }
+    if (isAdmin) { $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 9); initAdmin(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
     go(0, x, y);
     document.dispatchEvent(new Event('entered'));
@@ -206,7 +213,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
     btn.disabled = true;
     try {
       quizQ = await rpc('get_question', {});
-      if (!quizQ) return herIn(btn); // вопросов нет — пускаем сразу
+      if (!quizQ) { store.set('key', await rpc('open_session', {})); preloadMemories(); return herIn(btn); } // вопросов нет — пускаем сразу
       wrong = 0;
       $('#quizQ').textContent = quizQ.question;
       const a = $('#quizA'); a.value = '';
@@ -215,7 +222,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
       $('#who').hidden = true; $('#login').hidden = true; $('#quiz').hidden = false; $('#intro').classList.add('asking');
       replay($('#quiz'), 'pop-in');
       if (a.type === 'text') setTimeout(() => a.focus(), 300);
-    } catch (e) { console.error(e); herIn(btn); } // нет связи — не мучаем
+    } catch (e) { console.error(e); toast('Нет связи, проверь интернет'); } // без ключа внутри всё равно пусто
     finally { btn.disabled = false; }
   }
   async function answer() {
@@ -224,7 +231,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
     btn.disabled = true;
     try {
       const r = await rpc('check_answer', { qid: quizQ.id, a: a.value });
-      if (r && r.ok) { $('#quiz').hidden = true; return herIn(btn); }
+      if (r && r.ok) { store.set('key', r.key); preloadMemories(); $('#quiz').hidden = true; return herIn(btn); }
       wrong++; replay(a, 'shake'); buzz(60);
       toast(NOPE[Math.floor(Math.random() * NOPE.length)]);
       if (r && r.hint) { $('#quizHint').textContent = 'Подсказка: ' + r.hint; $('#quizHint').hidden = false; }
@@ -232,7 +239,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
     } catch (e) { console.error(e); toast('Нет связи, попробуй ещё раз'); }
     finally { btn.disabled = false; }
   }
-  $('#asHer').onclick = e => { preloadMemories(); ask(e.currentTarget); };
+  $('#asHer').onclick = e => ask(e.currentTarget);
   // её вход: вжух → полёт сквозь воспоминания → «привет»
   function herIn(btn) {
     if (reduce) return enter(btn, ['💗', '💖', '✨']);
@@ -245,7 +252,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
   $('#asHim').onclick = async e => {
     const btn = e.currentTarget;
     if (adminPass) {
-      try { if (await checkPass(adminPass)) { isAdmin = true; return enter(btn, ['🪖', '⭐', '✨', '💪']); } }
+      try { if (await checkPass(adminPass)) { store.set('key', await rpc('admin_session', { p: adminPass })); isAdmin = true; return enter(btn, ['🪖', '⭐', '✨', '💪']); } }
       catch (err) { console.error(err); }
       adminPass = null; store.set('adm', null);
     }
@@ -258,7 +265,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
     btn.disabled = true;
     try {
       if (!(await checkPass(pass.value))) throw new Error('bad password');
-      adminPass = pass.value; store.set('adm', adminPass); isAdmin = true; pass.value = '';
+      adminPass = pass.value; store.set('adm', adminPass); store.set('key', await rpc('admin_session', { p: adminPass })); isAdmin = true; pass.value = '';
       enter(btn, ['🪖', '⭐', '✨', '💪']);
     } catch (err) { console.error(err); replay(pass, 'shake'); buzz(60); toast(/bad password/.test(err.message) ? 'Неверный пароль' : 'Нет связи, попробуй ещё раз'); }
     finally { btn.disabled = false; }
@@ -1196,7 +1203,7 @@ $('#sheetDel').onclick = async () => {
   try { await rpc('admin_delete', { p: adminPass, tbl: admTab, row_id: editing.id }); await afterChange('Удалено'); }
   catch (e) { console.error(e); toast(errMsg(e)); }
 };
-$('#logout').onclick = () => { store.set('adm', null); location.reload(); };
+$('#logout').onclick = () => { store.set('adm', null); store.set('key', null); location.reload(); };
 
 /* ================= ✨ её вход: вжух ================= */
 let memCache = [], memLoading = null;
@@ -1298,4 +1305,4 @@ function entrance(done) {
 }
 
 /* ================= старт ================= */
-loadNote(); loadLetters(); loadJar(); loadPlans(); loadMood();
+document.addEventListener('entered', () => { loadNote(); loadLetters(); loadJar(); loadPlans(); loadMood(); });

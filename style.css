@@ -560,6 +560,9 @@ dialog.sheet[open] { animation: slideup .45s var(--ease); }
 .mm-card.match .mm-in { animation: matchpop .55s var(--spring); }
 @keyframes matchpop { 50% { transform: rotateY(180deg) scale(1.12); } }
 
+/* оптимизация: на скрытых экранах анимации стоят */
+.screen:not(.show) .bg i, .screen:not(.show) [class*="pulse"], .screen:not(.show) .days { animation-play-state: paused; }
+
 /* вертикальные скроллы никогда не уезжают вбок (иначе экран «сдвигается» и ломает свайпы) */
 .content, .us-scroll, .pz-list, .mm-menu, .sa-notes, .letter p, .sd-panel { overflow-x: hidden; }
 
