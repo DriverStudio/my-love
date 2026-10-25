@@ -182,7 +182,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
   function enter(btn, chars, pt) {
     const r = btn.getBoundingClientRect(), x = pt ? pt[0] : r.left + r.width / 2, y = pt ? pt[1] : r.top + r.height / 2;
     fx.burst(x, y, chars, 60, 1.4); buzz(30);
-    if (isAdmin) { $('#suggest').hidden = true; $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 9); initAdmin(); loadPlans(); }
+    if (isAdmin) { $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 9); initAdmin(); loadPlans(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
     go(0, x, y);
     document.dispatchEvent(new Event('entered'));
@@ -421,7 +421,7 @@ $('#jar').onclick = () => {
 let plans = [];
 const HEART = '<svg viewBox="0 0 24 22" aria-hidden="true"><path d="M12 21C5 16 1 12.5 1 7.5 1 4 3.7 1.5 7 1.5c2 0 3.8 1 5 2.7C13.2 2.5 15 1.5 17 1.5c3.3 0 6 2.5 6 6 0 5-4 8.5-11 13.5Z"/></svg>';
 function plansSub() {
-  const ok = plans.filter(p => p.approved), both = plans.filter(p => p.liked && p.liked_he).length;
+  const ok = plans, both = plans.filter(p => p.liked && p.liked_he).length;
   $('#plansSub').textContent = `Сделали ${ok.filter(p => p.done).length} из ${ok.length}` + (both ? `, совпали ${both} 💞` : '');
 }
 async function loadPlans() {
@@ -432,10 +432,13 @@ async function loadPlans() {
     ul.innerHTML = '';
     for (const p of plans) {
       const li = document.createElement('li');
-      li.className = 'plan' + (p.done ? ' done' : '') + (p.approved ? '' : ' pending'); li.dataset.a = '';
-      const tag = p.approved ? (p.by_her ? `<span class="tag">${isAdmin ? 'её идея' : 'твоя идея'} 💡</span>` : '') : `<span class="tag">${isAdmin ? 'ждёт твоего «да»' : 'ждёт его «да»'}</span>`;
-      li.innerHTML = `<span class="check">${p.done ? '✓' : p.approved ? '' : '⏳'}</span><span class="t"><span class="tx"></span>${tag}</span>
-        <button class="likes ${isAdmin ? 'me-him' : 'me-her'}" aria-label="Хочу"><span class="lh her">${HEART}</span><span class="lh him">${HEART}</span></button>`;
+      li.className = 'plan' + (p.done ? ' done' : ''); li.dataset.a = '';
+      const mineIdea = p.by_her !== isAdmin; // идея того, кто сейчас смотрит
+      const tag = `<span class="tag">${mineIdea ? 'твоя идея' : p.by_her ? 'её идея' : 'его идея'} ${p.by_her ? '💗' : '💙'}</span>`;
+      // первым стоит сердечко автора идеи
+      const hearts = p.by_her ? `<span class="lh her">${HEART}</span><span class="lh him">${HEART}</span>` : `<span class="lh him">${HEART}</span><span class="lh her">${HEART}</span>`;
+      li.innerHTML = `<span class="check">${p.done ? '✓' : ''}</span><span class="t"><span class="tx"></span>${tag}</span>
+        <button class="likes ${isAdmin ? 'me-him' : 'me-her'}" aria-label="Хочу">${hearts}</button>`;
       $('.tx', li).textContent = p.text;
       const btn = $('.likes', li), mineK = () => isAdmin ? 'liked_he' : 'liked';
       const paint = () => {
@@ -466,9 +469,9 @@ async function suggest() {
   if (!t) { replay(inp, 'shake'); return; }
   $('#sugBtn').disabled = true;
   try {
-    await rpc('suggest_plan', { t });
+    await rpc('plan_add', { p: isAdmin ? adminPass : null, t });
     inp.value = ''; fx.at($('#sugBtn'), ['💡', '💖', '✨'], 22); buzz(20);
-    toast('Отправила ему на одобрение 💌'); await loadPlans();
+    toast('Добавлено в список 🌴'); await loadPlans();
   } catch (e) { console.error(e); toast('Не отправилось, попробуй ещё раз'); }
   finally { $('#sugBtn').disabled = false; }
 }
@@ -994,9 +997,9 @@ const T = {
   reasons: { name: 'Причины', one: 'причину', order: 'id',
     fields: [['text', 'Почему я тебя люблю', 'area']], label: r => r.text, meta: () => '' },
   plans: { name: 'Планы', one: 'план', order: 'id',
-    fields: [['text', 'Что сделаем', 'text'], ['approved', 'Одобрено (она видит без «ждёт»)', 'check'], ['done', 'Уже сделали', 'check']],
-    label: r => (r.approved ? '' : '⏳ ') + r.text,
-    meta: r => [r.approved ? '' : 'Она предложила, ждёт твоего «да»', r.by_her && r.approved ? 'идея от неё' : '', r.done ? '✓ сделали' : '', r.liked ? '💗 она хочет' : '', r.liked_he ? '💜 ты хочешь' : ''].filter(Boolean).join(', ') },
+    fields: [['text', 'Что сделаем', 'text'], ['done', 'Уже сделали', 'check']],
+    label: r => r.text,
+    meta: r => [r.by_her ? 'её идея 💗' : 'твоя идея 💙', r.done ? '✓ сделали' : '', r.liked ? '💗 она хочет' : '', r.liked_he ? '💙 ты хочешь' : ''].filter(Boolean).join(', ') },
 };
 T.puzzles = { name: 'Пазлы', one: 'пазл',
   fields: [['image', 'Фото для пазла', 'image'], ['cols', 'Сложность', 'select'],
@@ -1024,9 +1027,7 @@ const sheet = $('#sheet');
 
 function initAdmin() { renderTabs(); loadAdm(); }
 function renderTabs() {
-  const pend = plans.filter(p => !p.approved).length;
-  $('#admTabs').innerHTML = Object.entries(T).map(([k, t]) =>
-    `<button data-k="${k}" aria-pressed="${k === admTab}">${t.name}${k === 'plans' && pend ? `<span class="badge">${pend}</span>` : ''}</button>`).join('');
+  $('#admTabs').innerHTML = Object.entries(T).map(([k, t]) => `<button data-k="${k}" aria-pressed="${k === admTab}">${t.name}</button>`).join('');
 }
 $('#admTabs').onclick = e => { const b = e.target.closest('button'); if (!b || b.dataset.k === admTab) return; admTab = b.dataset.k; renderTabs(); loadAdm(); buzz(); };
 async function loadAdm() {
@@ -1064,7 +1065,7 @@ function openSheet(row) {
     : `<label class="field"><span>${l}</span>${type === 'area' ? `<textarea name="${k}" rows="${k === 'body' ? 9 : 3}"></textarea>` : `<input name="${k}" type="${type}">`}</label>`).join('');
   t.fields.forEach(([k, , type, opt]) => {
     const el = $(`[name="${k}"]`, sheet);
-    if (type === 'check') el.checked = row ? !!row[k] : k === 'approved';
+    if (type === 'check') el.checked = row ? !!row[k] : false;
     else if (type === 'color') initPalette(el, row && row[k]);
     else if (type === 'image') initImagePick(row);
     else if (type === 'select') el.value = row ? row[k] : k === 'cols' ? '4' : SELECTS[k][0][0];
@@ -1106,7 +1107,6 @@ const NOTIFY = {
   memories: ['📸', () => 'Новое воспоминание, оно уже летает при входе ✨'],
   letters: ['💌', d => d.open_at > dateIn(Date.now()) ? `Новое письмо «${d.title}», откроется ${fmtDate(d.open_at)}` : `Новое письмо «${d.title}», можно открыть!`],
   reasons: ['💗', () => 'В банке причин появилась новая. Тряхни её!'],
-  plans: ['🌴', d => `Новый план на после дембеля: «${d.text}»`],
   notes: ['📝', d => d.show_on && d.show_on <= dateIn(Date.now()) ? 'Записка дня обновлена' : null],
 };
 let pendingImg = null;

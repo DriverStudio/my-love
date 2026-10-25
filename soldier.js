@@ -462,9 +462,11 @@
     });
     $('#saFdel').onclick = () => { frameImg = ''; $('#saFprev').innerHTML = '<span>💗</span>'; $('#saFdel').hidden = true; $('#saFcap').textContent = 'Не забудь сохранить'; setFrame(prev, null); };
     const prev = $('#saPrev');
-    const dirty = () => { const b = $('#saSave'); if (b.hidden) { b.hidden = false; replay(b, 'pop-in'); } };
-    box.addEventListener('input', dirty);
-    box.addEventListener('click', e => { if (e.target.closest('.sa button:not(#saSave)')) dirty(); });
+    const dirty = () => { const b = $('#saSave'); if (b && b.hidden) { b.hidden = false; replay(b, 'pop-in'); } };
+    // слушаем только саму форму солдатика (она пересоздаётся), а не общий контейнер пульта
+    const form = $('.sa', box);
+    form.addEventListener('input', dirty);
+    form.addEventListener('click', e => { if (e.target.closest('button:not(#saSave)')) dirty(); });
     const showLook = () => { prev.style.setProperty('--skin', SKIN[look.skin]); prev.style.setProperty('--hair', look.hair); prev.style.setProperty('--eyes', look.eyes);
       prev.dataset.hair = look.style; prev.dataset.glasses = look.glasses ? 1 : 0; prev.dataset.stubble = look.stubble ? 1 : 0; prev.dataset.st = status; };
     showLook(); setFrame(prev, c.frame_img);
