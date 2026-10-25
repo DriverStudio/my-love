@@ -5,6 +5,17 @@ const DAY = 864e5;
 const reduce = matchMedia('(prefers-reduced-motion: reduce)').matches;
 const START = new Date(C.START), END = new Date(C.END);
 
+/* страница не должна сдвигаться: если браузер её прокрутил (клавиатура, фокус) — возвращаем */
+const resetScroll = () => {
+  const a = document.activeElement;
+  if (a && /^(INPUT|TEXTAREA|SELECT)$/.test(a.tagName)) return; // пока печатает — не мешаем
+  if (window.scrollX || window.scrollY) window.scrollTo(0, 0);
+  if (document.documentElement.scrollTop || document.body.scrollTop) { document.documentElement.scrollTop = 0; document.body.scrollTop = 0; }
+};
+addEventListener('scroll', resetScroll, { passive: true });
+document.addEventListener('focusout', () => setTimeout(resetScroll, 60));
+window.visualViewport && visualViewport.addEventListener('resize', () => setTimeout(resetScroll, 120));
+
 /* ================= helpers ================= */
 const H = { apikey: C.SUPABASE_KEY, 'Content-Type': 'application/json' };
 if (C.SUPABASE_KEY.startsWith('eyJ')) H.Authorization = 'Bearer ' + C.SUPABASE_KEY;
