@@ -734,23 +734,44 @@
     const mine = r => me() === 'he' ? r.he_reels : r.she_reels, theirs = r => me() === 'he' ? r.she_reels : r.he_reels;
     const machine = (id, title, cls) => `<div class="cs-machine ${cls}" id="${id}"><div class="cs-lights"></div>
       <div class="cs-top"><span>${title}</span><b class="cs-pts"></b></div>
-      <div class="cs-reels">${[0, 1, 2].map(() => '<div class="cs-reel"><div class="cs-strip"><span>🎰</span></div></div>').join('')}</div></div>`;
+      <div class="cs-reels">${[0, 1, 2].map(() => '<div class="cs-reel"><div class="cs-strip"><span>🎰</span></div></div>').join('')}<div class="cs-hot">🔥 ДВА В РЯД!</div></div></div>`;
+    // барабан показывает символ по центру и половинки соседей сверху/снизу — как в настоящем автомате
+    const rnd = () => SYM[Math.floor(Math.random() * SYM.length)];
+    const geo = reel => { const H = reel.clientHeight, S = H / 1.5; return { H, S, at: i => -(i * S) + (H - S) / 2 }; };
     function setStatic(m, reels) {
-      $$('.cs-strip', m).forEach((sp, i) => { sp.style.transition = 'none'; sp.style.transform = 'translateY(0)'; sp.innerHTML = `<span>${reels ? SYM[reels[i]] : '🎰'}</span>`; });
+      $$('.cs-strip', m).forEach((sp, i) => {
+        const g = geo(sp.parentElement), mid = reels ? SYM[reels[i]] : '🎰';
+        sp.style.transition = 'none'; sp.innerHTML = [rnd(), mid, rnd()].map(x => `<span>${x}</span>`).join('');
+        sp.style.transform = `translateY(${g.at(1)}px)`; sp.dataset.cur = mid;
+      });
     }
     function spinMachine(m, reels, delay) {
       return new Promise(res => {
-        const h = $('.cs-reel', m).clientHeight; let n3 = 0;
-        $('.cs-pts', m).textContent = ''; m.classList.add('go');
-        $$('.cs-strip', m).forEach((sp, i) => {
-          const n = 20 + i * 6, cur = sp.textContent.trim() || '🎰';
-          const list = [cur, ...Array.from({ length: n - 2 }, () => SYM[Math.floor(Math.random() * SYM.length)]), SYM[reels[i]]];
-          sp.style.transition = 'none'; sp.style.transform = 'translateY(0)'; sp.innerHTML = list.map(x => `<span>${x}</span>`).join('');
-          void sp.offsetHeight;
-          const dur = 1200 + i * 420 + delay;
-          sp.style.transition = `transform ${dur}ms cubic-bezier(.12,.75,.22,1.04)`;
-          sp.style.transform = `translateY(${-(list.length - 1) * h}px)`;
-          setTimeout(() => { buzz(8); replay($$('.cs-reel', m)[i], 'stop'); if (++n3 === 3) { m.classList.remove('go'); setStatic(m, reels); res(); } }, dur);
+        const strips = $$('.cs-strip', m), reelsEl = $$('.cs-reel', m);
+        const two = reels[0] === reels[1];               // первые два совпали — интрига на третьем
+        const nearMiss = two && reels[2] !== reels[0];    // нужный символ «проскочит» прямо под окном
+        let n3 = 0, beat = 0;
+        $('.cs-pts', m).textContent = ''; m.classList.add('go'); m.classList.remove('suspense');
+        strips.forEach((sp, i) => {
+          const g = geo(reelsEl[i]), slow = i === 2 && two;
+          const n = 22 + i * 7 + (slow ? 26 : 0), cur = sp.dataset.cur || '🎰';
+          const list = [rnd(), cur, ...Array.from({ length: n }, rnd), SYM[reels[i]], rnd()];
+          const idx = list.length - 2;
+          if (slow) { list[idx - 2] = SYM[reels[0]]; list[idx + 1] = nearMiss ? SYM[reels[0]] : rnd(); } // дразним нужным символом
+          sp.style.transition = 'none'; sp.innerHTML = list.map(x => `<span>${x}</span>`).join('');
+          sp.style.transform = `translateY(${g.at(1)}px)`; void sp.offsetHeight;
+          const dur = 1100 + i * 420 + delay + (slow ? 2600 : 0);
+          sp.style.transition = `transform ${dur}ms ${slow ? 'cubic-bezier(.1,.62,.04,1)' : 'cubic-bezier(.12,.75,.22,1.04)'}`;
+          sp.style.transform = `translateY(${g.at(idx)}px)`;
+          setTimeout(() => {
+            buzz(i === 2 ? 25 : 10); replay(reelsEl[i], 'stop'); sp.dataset.cur = SYM[reels[i]];
+            if (i === 1 && two) { // включаем напряжение: свет, дрожь, «сердцебиение»
+              m.classList.add('suspense'); replay($('.cs-hot', m), 'show');
+              const hb = () => navigator.vibrate && navigator.vibrate([40, 110, 60]);
+              hb(); beat = setInterval(hb, 900);
+            }
+            if (++n3 === 3) { clearInterval(beat); m.classList.remove('go', 'suspense'); res({ two, nearMiss }); }
+          }, dur);
         });
       });
     }
@@ -758,13 +779,20 @@
       spinning = true; paint();
       $('#csMsg').textContent = 'Крутим!'; $('#csMsg').className = 'cs-msg';
       const a = mine(r), b = theirs(r), mA = $('#csMe'), mB = $('#csThem');
-      await Promise.all([spinMachine(mA, a, 0), spinMachine(mB, b, 150)]);
+      const [ra, rb] = await Promise.all([spinMachine(mA, a, 0), spinMachine(mB, b, 150)]);
       const pa = slotPts(a), pb = slotPts(b);
+      if (ra.nearMiss) setTimeout(() => toast('Аааа, чуть-чуть не хватило! 😩'), 300);
+      else if (rb.nearMiss) setTimeout(() => toast(`У ${isAdmin ? 'неё' : 'него'} почти было! 😅`), 300);
       $('.cs-pts', mA).textContent = pa ? '+' + pa : '0'; $('.cs-pts', mB).textContent = pb ? '+' + pb : '0';
       const win = r.winner === 'draw' ? null : r.winner === me();
       const msg = $('#csMsg');
       if (win === null) { msg.textContent = 'Ничья 🤝 Ещё раунд!'; msg.className = 'cs-msg'; }
-      else if (win) { msg.textContent = pa >= 100 ? 'ДЖЕКПОТ! Раунд твой 🎉' : 'Раунд твой! +1 🏆'; msg.className = 'cs-msg win'; replay(mA, 'cs-win'); fx.at(mA, pa >= 100 ? ['7️⃣', '🎉', '💰', '✨'] : ['🏆', '✨', '💗'], pa >= 100 ? 50 : 26, 1.2); navigator.vibrate && navigator.vibrate(pa >= 100 ? [60, 60, 60, 60, 200] : [40, 60, 40]); }
+      else if (win) {
+        msg.textContent = pa >= 100 ? 'ДЖЕКПОТ! Раунд твой 🎉' : pa >= 50 ? 'Тройная любовь! Раунд твой 💗' : 'Раунд твой! +1 🏆'; msg.className = 'cs-msg win';
+        replay(mA, 'cs-win'); fx.at(mA, pa >= 100 ? ['7️⃣', '🎉', '💰', '✨'] : ['🏆', '✨', '💗'], pa >= 100 ? 50 : 26, 1.2);
+        navigator.vibrate && navigator.vibrate(pa >= 100 ? [60, 60, 60, 60, 200] : [40, 60, 40]);
+        if (pa >= 100) coinRain();
+      }
       else { msg.textContent = `Раунд ${isAdmin ? 'её' : 'его'} 😤 Отыграйся!`; msg.className = 'cs-msg lose'; replay(mB, 'cs-win'); }
       spinning = false; paint();
       // матч до 3 побед — желание
@@ -781,6 +809,28 @@
         }, 900);
       }
     }
+    // дождь монет на джекпот
+    function coinRain() {
+      const box = $('#csFly'); if (!box) return;
+      root.classList.add('strobe'); setTimeout(() => root.classList.remove('strobe'), 900);
+      for (let i = 0; i < 34; i++) {
+        const c = document.createElement('div'); c.className = 'cs-coin'; c.textContent = i % 5 ? '🪙' : '💰';
+        c.style.left = Math.random() * 100 + '%'; box.append(c);
+        c.animate([{ transform: `translateY(-60px) rotate(0)`, opacity: 1 }, { transform: `translateY(${innerHeight + 60}px) rotate(${Math.random() * 720 - 360}deg)`, opacity: 1 }],
+          { duration: 1600 + Math.random() * 1400, delay: Math.random() * 600, easing: 'cubic-bezier(.4,.1,.8,.6)' }).onfinish = () => c.remove();
+      }
+    }
+    // серия побед подряд и матч-пойнт
+    function heat() {
+      const h = st.history || [], sc = st.score || {}; let streak = 0, who = null;
+      for (const r of h) { if (r.winner === 'draw') break; if (!who) who = r.winner; if (r.winner !== who) break; streak++; }
+      const parts = [];
+      if ((sc.me || 0) === 2 && (sc.other || 0) === 2) parts.push('⚡ РЕШАЮЩИЙ РАУНД — кто возьмёт, тот загадывает');
+      else if ((sc.me || 0) === 2) parts.push('⚡ МАТЧ-ПОИНТ: ещё раунд — и желание твоё');
+      else if ((sc.other || 0) === 2) parts.push(`⚡ МАТЧ-ПОИНТ у ${isAdmin ? 'неё' : 'него'}! Спасай желание`);
+      if (streak >= 2) parts.push(`🔥 ${who === me() ? 'Ты на серии' : (isAdmin ? 'Она на серии' : 'Он на серии')} ×${streak}`);
+      const el = $('#csHeat'); if (el) { el.textContent = parts.join('  ·  '); el.hidden = !parts.length; }
+    }
     function paint() {
       if (!st || !$('#csSpin')) return;
       const here = st.other_here, op = st.open || {}, b = $('#csSpin');
@@ -788,6 +838,7 @@
       const sc = spinning && shownSc ? shownSc : (shownSc = st.score || {}); // счёт меняется только после остановки барабанов
       $('#csScore').innerHTML = `<div><small>Ты</small><b>${sc.me || 0}</b></div><span>:</span><div><small>${Other()}</small><b>${sc.other || 0}</b></div>`;
       $('#csGoal').textContent = `Матч до ${sc.target || 3} побед — победитель загадывает желание 🎁`;
+      if (!spinning) heat();
       const W = st.wishes || {}; $('#csWishes').textContent = `🎁 Желаний выиграно: ты ${W.me || 0}, ${other()} ${W.other || 0}`;
       b.classList.remove('hot');
       if (spinning) { b.disabled = true; b.textContent = 'Крутится…'; }
@@ -829,7 +880,7 @@
         r.innerHTML = `<div class="us-scroll cs">
           <div class="cs-who" id="csWho"></div>
           ${machine('csThem', Other(), 'them')}
-          <div class="cs-board"><div class="cs-score" id="csScore"></div><p class="cs-msg" id="csMsg">Крутите вместе: у кого комбинация круче — тот берёт раунд</p></div>
+          <div class="cs-board"><p class="cs-heat" id="csHeat" hidden></p><div class="cs-score" id="csScore"></div><p class="cs-msg" id="csMsg">Крутите вместе: у кого комбинация круче — тот берёт раунд</p></div>
           ${machine('csMe', 'Ты', 'me')}
           <button class="btn cs-spin" id="csSpin" disabled>…</button>
           <button class="link cs-inv" id="csInvite" hidden>📣 Позвать ${isAdmin ? 'её' : 'его'}</button>
