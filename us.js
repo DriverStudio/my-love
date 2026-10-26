@@ -702,15 +702,28 @@
   GAMES.casino = (() => {
     let root, timer = 0, lastRound = 0, lastWish = 0, spinning = false, st = null, shownSc = null, seenChat = new Set();
     // сообщение улетает вверх и тает, как реакции в трансляциях
+    // очередь, чтобы пузыри не налезали друг на друга: вылетают по одному с интервалом
+    const flyQ = { true: [], false: [] }, flyBusy = { true: false, false: false };
     function fly(text, mine) {
+      flyQ[mine].push(text);
+      if (flyBusy[mine]) return;
+      const next = () => {
+        const t = flyQ[mine].shift();
+        if (t === undefined) { flyBusy[mine] = false; return; }
+        flyBusy[mine] = true; launch(t, mine); setTimeout(next, 650);
+      };
+      next();
+    }
+    function launch(text, mine) {
       const box = $('#csFly'); if (!box) return;
       const emo = /^\p{Extended_Pictographic}[\p{Extended_Pictographic}\u200d\ufe0f]*$/u.test(text);
       const el = document.createElement('div');
       el.className = 'cs-bub ' + (mine ? 'mine' : 'theirs') + (emo ? ' emo' : '');
       el.textContent = text;
-      el.style.left = (mine ? 52 + Math.random() * 30 : 8 + Math.random() * 30) + '%';
+      // как в мессенджере: свои прижаты к правому краю, чужие — к левому, ширина по тексту
+      el.style[mine ? 'right' : 'left'] = (4 + Math.random() * (emo ? 30 : 8)) + '%';
       box.append(el);
-      const sway = (Math.random() - .5) * 60, rise = innerHeight * (.45 + Math.random() * .2);
+      const sway = (Math.random() - .5) * (emo ? 60 : 24), rise = innerHeight * (.45 + Math.random() * .2);
       el.animate([
         { transform: 'translate(0,0) scale(.5)', opacity: 0 },
         { transform: `translate(${sway * .3}px,-40px) scale(1.05)`, opacity: 1, offset: .12 },
