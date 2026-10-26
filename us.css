@@ -302,3 +302,17 @@
 .cs-wish i { font-style: normal; font-size: 70px; }
 .cs-wish b { font: 800 1.3rem Unbounded, sans-serif; }
 .cs-wish small { font: 700 1.3rem Caveat, cursive; }
+
+/* 💬 летающие сообщения в казино */
+.cs-chat { display: flex; gap: 8px; }
+.cs-chat input { flex: 1; min-width: 0; padding: 12px 16px; border-radius: 999px; border: 1px solid rgba(255,255,255,.22); background: rgba(255,255,255,.08);
+  color: #fff; font: 600 16px Manrope, sans-serif; outline: none; }
+.cs-chat button { flex: none; width: 46px; border-radius: 50%; background: linear-gradient(135deg, var(--berry), var(--peach)); color: #fff; font-size: 1.1rem; }
+.cs-reacts { display: flex; justify-content: center; gap: 6px; }
+.cs-reacts button { width: 44px; height: 44px; border-radius: 50%; background: rgba(255,255,255,.08); font-size: 1.3rem; }
+.cs-fly { position: absolute; inset: 0; pointer-events: none; overflow: hidden; z-index: 4; }
+.cs-bub { position: absolute; bottom: 120px; max-width: 46%; padding: 8px 14px; border-radius: 18px; font-weight: 800; font-size: .9rem; line-height: 1.25;
+  color: #fff; box-shadow: 0 8px 20px -6px rgba(0,0,0,.5); word-break: break-word; }
+.cs-bub.mine { background: linear-gradient(135deg, #FF3D8B, #FF8FC1); border-bottom-right-radius: 4px; }
+.cs-bub.theirs { background: linear-gradient(135deg, #2F7BFF, #8A4DFF); border-bottom-left-radius: 4px; }
+.cs-bub.emo { background: none; box-shadow: none; padding: 0; font-size: 2.4rem; filter: drop-shadow(0 4px 8px rgba(0,0,0,.35)); }

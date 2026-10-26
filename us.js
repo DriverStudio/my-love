@@ -209,7 +209,7 @@
   async function renderQ() {
     const box = $('#usQ'); if (!box) return;
     const d = dateIn(Date.now()), q = todayQ();
-    let r = null; try { r = await call('qday_get', { d }); } catch (e) { console.error(e); }
+    let r = null; try { r = await call('qday_get', { d, qt: q }); } catch (e) { console.error(e); }
     if (!r) { box.innerHTML = `<p class="us-qk">Вопрос дня</p><p class="us-qq">${esc(q)}</p><p class="err">Не загрузилось</p>`; return; }
     if (!r.mine) {
       box.innerHTML = `<p class="us-qk">Вопрос дня ${r.other_done ? `<span class="us-tag">${other()} уже ответил${isAdmin ? 'а' : ''} 👀</span>` : ''}</p><p class="us-qq">${esc(q)}</p>
@@ -692,7 +692,24 @@
   const SYM = ['🍒', '🍋', '🍇', '7️⃣', '💗'];
   const slotPts = r => !r ? 0 : r[0] === r[1] && r[1] === r[2] ? (r[0] === 3 ? 100 : r[0] === 4 ? 50 : 30) : (r[0] === r[1] || r[1] === r[2] || r[0] === r[2]) ? 10 : 0;
   GAMES.casino = (() => {
-    let root, timer = 0, lastRound = 0, lastWish = 0, spinning = false, st = null, shownSc = null;
+    let root, timer = 0, lastRound = 0, lastWish = 0, spinning = false, st = null, shownSc = null, seenChat = new Set();
+    // сообщение улетает вверх и тает, как реакции в трансляциях
+    function fly(text, mine) {
+      const box = $('#csFly'); if (!box) return;
+      const emo = /^\p{Extended_Pictographic}[\p{Extended_Pictographic}\u200d\ufe0f]*$/u.test(text);
+      const el = document.createElement('div');
+      el.className = 'cs-bub ' + (mine ? 'mine' : 'theirs') + (emo ? ' emo' : '');
+      el.textContent = text;
+      el.style.left = (mine ? 52 + Math.random() * 30 : 8 + Math.random() * 30) + '%';
+      box.append(el);
+      const sway = (Math.random() - .5) * 60, rise = innerHeight * (.45 + Math.random() * .2);
+      el.animate([
+        { transform: 'translate(0,0) scale(.5)', opacity: 0 },
+        { transform: `translate(${sway * .3}px,-40px) scale(1.05)`, opacity: 1, offset: .12 },
+        { transform: `translate(${-sway * .5}px,${-rise * .5}px) scale(1)`, opacity: 1, offset: .55 },
+        { transform: `translate(${sway}px,${-rise}px) scale(.9)`, opacity: 0 },
+      ], { duration: emo ? 2600 : 3600, easing: 'cubic-bezier(.25,.6,.4,1)' }).onfinish = () => el.remove();
+    }
     const mine = r => me() === 'he' ? r.he_reels : r.she_reels, theirs = r => me() === 'he' ? r.she_reels : r.he_reels;
     const machine = (id, title, cls) => `<div class="cs-machine ${cls}" id="${id}"><div class="cs-lights"></div>
       <div class="cs-top"><span>${title}</span><b class="cs-pts"></b></div>
@@ -770,6 +787,10 @@
         const prevHere = st && st.other_here;
         st = await call('casino_state');
         if (!first && !prevHere && st.other_here) { toast(`${Other()} за столом! 🎰`); buzz(20); }
+        (st.chat || []).forEach((c, i) => {
+          if (seenChat.has(c.id)) return; seenChat.add(c.id);
+          if (!first && c.who !== me()) setTimeout(() => fly(c.text, false), i * 180);
+        });
         const top = (st.history || [])[0];
         if (first) {
           lastRound = top ? top.id : 0; lastWish = st.last_wish ? st.last_wish.id : 0;
@@ -791,9 +812,21 @@
           ${machine('csMe', 'Ты', 'me')}
           <button class="btn cs-spin" id="csSpin" disabled>…</button>
           <button class="link cs-inv" id="csInvite" hidden>📣 Позвать ${isAdmin ? 'её' : 'его'}</button>
+          <div class="cs-chat"><input id="csSay" maxlength="60" placeholder="Скажи что-нибудь…" autocomplete="off"><button id="csSend" aria-label="Отправить">➤</button></div>
+          <div class="cs-reacts" id="csReacts">${['❤️', '🔥', '😂', '😱', '👏', '😘'].map(e => `<button>${e}</button>`).join('')}</div>
           <p class="us-hint" id="csGoal"></p><p class="cs-wishes" id="csWishes"></p>
           <details class="cs-rules"><summary>Очки</summary><p>7️⃣7️⃣7️⃣ — 100 · 💗💗💗 — 50 · три одинаковых — 30 · два одинаковых — 10</p></details>
-          <p class="us-sec">Последние 10 раундов <small>(ты · ${other()})</small></p><div class="cs-hist" id="csHist"></div></div>`;
+          <p class="us-sec">Последние 10 раундов <small>(ты · ${other()})</small></p><div class="cs-hist" id="csHist"></div></div>
+          <div class="cs-fly" id="csFly"></div>`;
+        const say = async t => {
+          t = t.trim(); if (!t) return;
+          const now = Date.now(); if (now - (say.last || 0) < 150) return; say.last = now;
+          fly(t, true); buzz(6);
+          try { const id = await call('casino_say', { t }); if (id) seenChat.add(id); } catch (e) { console.error(e); }
+        };
+        $('#csSend').onclick = () => { say($('#csSay').value); $('#csSay').value = ''; };
+        $('#csSay').onkeydown = e => { if (e.key === 'Enter') $('#csSend').click(); };
+        $('#csReacts').onclick = e => { const b = e.target.closest('button'); if (b) { replay(b, 'pump'); say(b.textContent); } };
         $('#csSpin').onclick = async () => {
           const b = $('#csSpin'); b.disabled = true; buzz(15);
           try { st = await call('casino_ready'); const top = (st.history || [])[0]; if (top && top.id > lastRound) { lastRound = top.id; playRound(top); } else paint(); }
