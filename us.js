@@ -206,10 +206,18 @@
   const dayNo = () => Math.floor(Date.parse(dateIn(Date.now()) + 'T00:00:00Z') / DAY);
   const startNo = () => Math.floor(Date.parse(dateIn(START.getTime()) + 'T00:00:00Z') / DAY);
   const todayQ = () => QS[((dayNo() - startNo()) % QS.length + QS.length) % QS.length];
+  let qShownFor = null;
+  // в полночь (по Москве) вопрос меняется сам, даже если сайт открыт всю ночь
+  setInterval(() => { if (qShownFor && qShownFor !== dateIn(Date.now()) && !document.hidden) renderQ(); }, 30000);
+  document.addEventListener('visibilitychange', () => { if (!document.hidden && qShownFor && qShownFor !== dateIn(Date.now())) renderQ(); });
   async function renderQ() {
     const box = $('#usQ'); if (!box) return;
     const d = dateIn(Date.now()), q = todayQ();
     let r = null; try { r = await call('qday_get', { d, qt: q }); } catch (e) { console.error(e); }
+    // страховка: ответы показываем, только если они даны именно на этот вопрос
+    if (r && r.q_mine !== undefined && r.q_mine !== q) { r.mine = null; r.other = null; }
+    if (r && r.q_other !== undefined && r.q_other !== q) { r.other = null; r.other_done = false; }
+    qShownFor = d;
     if (!r) { box.innerHTML = `<p class="us-qk">Вопрос дня</p><p class="us-qq">${esc(q)}</p><p class="err">Не загрузилось</p>`; return; }
     if (!r.mine) {
       box.innerHTML = `<p class="us-qk">Вопрос дня ${r.other_done ? `<span class="us-tag">${other()} уже ответил${isAdmin ? 'а' : ''} 👀</span>` : ''}</p><p class="us-qq">${esc(q)}</p>
