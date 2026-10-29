@@ -237,21 +237,56 @@
     }
     $('#usQfeed').onclick = () => openLayer(Feed);
   }
+  // вопрос любого дня службы (тот же расчёт, что и для «вопроса дня»)
+  const qFor = day => { const n = Math.floor(Date.parse(day + 'T00:00:00Z') / DAY); return QS[((n - startNo()) % QS.length + QS.length) % QS.length]; };
   const Feed = {
     title: 'Наши ответы',
     async open(root) {
       root.innerHTML = '<div class="us-scroll" id="usFeed"><p class="err">Загружаю…</p></div>';
-      try {
-        const rows = await call('qday_feed');
-        $('#usFeed').innerHTML = rows.length ? rows.map((r, i) => `
-          <div class="us-card" style="animation-delay:${i * 40}ms"><small class="us-date">${new Date(r.day + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</small>
-            <p class="us-qq">${esc(r.q)}</p>
-            <div class="us-ans mine"><small>Ты</small><p>${r.mine ? esc(r.mine) : '<i>не ответил' + (isAdmin ? '' : 'а') + '</i>'}</p></div>
-            <div class="us-ans theirs"><small>${Other()}</small><p>${r.other ? esc(r.other) : r.other_done ? '🔒 ответь, чтобы увидеть' : '<i>не ответил' + (isAdmin ? 'а' : '') + '</i>'}</p></div></div>`).join('')
-          : '<p class="err">Пока пусто. Ответьте на первый вопрос дня 💬</p>';
-      } catch (e) { console.error(e); fail($('#usFeed')); }
+      let rows;
+      try { rows = await call('qday_feed'); } catch (e) { console.error(e); fail($('#usFeed')); return; }
+      const box = $('#usFeed'); if (!box) return;
+      // все дни службы за последний месяц + всё, где кто-то отвечал раньше
+      const byDay = new Map(rows.map(r => [r.day, r])), start = dateIn(START.getTime()), today = dateIn(Date.now());
+      for (let i = 0; i < 30; i++) {
+        const d = dateIn(Date.now() - i * DAY);
+        if (d < start) break;
+        if (!byDay.has(d)) byDay.set(d, { day: d, q: qFor(d), mine: null, other: null, other_done: false });
+      }
+      const days = [...byDay.values()].sort((a, b) => b.day.localeCompare(a.day));
+      const missed = days.filter(r => !r.mine && r.day !== today).length;
+      box.innerHTML = missed ? `<p class="us-hint fd-miss">Пропущено вопросов: ${missed}. На них можно ответить и сейчас ✍️</p>` : '';
+      days.forEach((r, i) => box.append(card(r, i)));
     },
   };
+  function card(r, i) {
+    const c = document.createElement('div');
+    c.className = 'us-card' + (r.mine ? '' : ' fd-open'); c.style.animationDelay = i * 30 + 'ms';
+    const q = r.q || qFor(r.day);
+    c.innerHTML = `<small class="us-date">${new Date(r.day + 'T00:00:00').toLocaleDateString('ru-RU', { day: 'numeric', month: 'long' })}</small>
+      <p class="us-qq"></p>
+      <div class="us-ans mine"><small>Ты</small><p>${r.mine ? esc(r.mine) : '<i>ещё не ответил' + (isAdmin ? '' : 'а') + '</i>'}</p></div>
+      <div class="us-ans theirs"><small>${Other()}</small><p>${r.other ? esc(r.other) : r.other_done ? '🔒 ответь, чтобы увидеть' : '<i>не ответил' + (isAdmin ? 'а' : '') + '</i>'}</p></div>
+      ${r.mine ? '' : '<div class="fd-act"><button class="btn btn-sm">✍️ Ответить</button></div>'}`;
+    $('.us-qq', c).textContent = q;
+    const act = $('.fd-act', c);
+    if (act) $('button', act).onclick = () => {
+      act.innerHTML = '<div class="us-form"><textarea rows="2" maxlength="500" placeholder="Твой ответ…"></textarea><div class="us-row"><span></span><button class="btn btn-sm">Ответить</button></div></div>';
+      const ta = $('textarea', act); ta.focus();
+      $('.btn', act).onclick = async e => {
+        const a = ta.value.trim(); if (!a) { replay(ta, 'shake'); return; }
+        e.currentTarget.disabled = true;
+        try {
+          const res = await call('qday_answer', { d: r.day, qt: q, ans: a });
+          const nr = { ...r, q, mine: res.mine, other: res.other, other_done: res.other_done };
+          const nc = card(nr, 0); nc.classList.add('seen'); c.replaceWith(nc);
+          fx.at(nc, ['💬', '💗', '✨'], 16); buzz(15);
+          if (r.day === dateIn(Date.now())) renderQ();
+        } catch (er) { toast(errText(er)); e.currentTarget.disabled = false; }
+      };
+    };
+    return c;
+  }
 
   /* ================= 4. ДНЕВНИК ================= */
   const REACTS = ['💗', '😍', '😂', '🥺', '🔥', '👏'];

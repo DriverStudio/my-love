@@ -338,3 +338,9 @@
 .cs-coin { position: absolute; top: 0; font-size: 28px; }
 .layer-body.strobe { animation: strobe .9s steps(2) 1; }
 @keyframes strobe { 0%, 40%, 80% { filter: brightness(1.8) saturate(1.4); } 20%, 60%, 100% { filter: none; } }
+
+/* пропущенные вопросы дня */
+.fd-miss { text-align: center; font-weight: 800; color: #FFD86B; }
+.us-card.fd-open { border-style: dashed; }
+.fd-act { margin-top: 10px; display: flex; justify-content: flex-end; }
+.fd-act .us-form { width: 100%; }
