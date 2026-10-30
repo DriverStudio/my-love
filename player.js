@@ -36,11 +36,24 @@
     if (cur < 0) return setTrack(0);
     aud.paused ? aud.play().catch(() => toast('Не получилось включить')) : aud.pause();
   }
+  // включил песню — сцена проваливается во мрак; пауза — возвращается обычный плеер
+  let darkT = 0;
+  function setDark(on) {
+    const sc = $('.s-music'); clearTimeout(darkT);
+    if (on === sc.classList.contains('dark')) return;
+    if (on) {
+      const b = $('#muPlay').getBoundingClientRect();
+      sc.style.setProperty('--px', b.left + b.width / 2 + 'px'); sc.style.setProperty('--py', b.top + b.height / 2 + 'px');
+      sc.classList.add('dark'); sync();
+      replay(sc, 'mu-drop'); navigator.vibrate && navigator.vibrate([25, 60, 140]);
+    } else darkT = setTimeout(() => { sc.classList.remove('dark'); setTimeout(sync, 1200); }, 350); // короткие паузы при смене песни не считаем
+  }
   function paint() {
     const playing = !aud.paused;
     $('#muPlay').textContent = playing ? '⏸' : '▶';
     $('#navMusic').classList.toggle('playing', playing);
     $('.s-music').classList.toggle('playing', playing);
+    setDark(playing);
     $('#muShuf').classList.toggle('on', shuffle); $('#muRep').classList.toggle('on', repeat);
   }
   function renderList() {
@@ -204,7 +217,7 @@
     };
   })();
   // сцена живёт только пока экран плеера на виду
-  const isOn = () => $('.s-music').classList.contains('show') && !document.hidden;
+  const isOn = () => $('.s-music').classList.contains('show') && $('.s-music').classList.contains('dark') && !document.hidden;
   const sync = () => isOn() ? War.start() : War.stop();
   new MutationObserver(sync).observe($('.s-music'), { attributes: true, attributeFilter: ['class'] });
   document.addEventListener('visibilitychange', sync);

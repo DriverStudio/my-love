@@ -15,10 +15,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;700;800&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=40">
-<link rel="stylesheet" href="us.css?v=40">
-<link rel="stylesheet" href="player.css?v=40">
-<link rel="stylesheet" href="soldier.css?v=40" onerror="window.onerror && window.onerror('Не нашёлся файл soldier.css', 'soldier.css', 0)">
+<link rel="stylesheet" href="style.css?v=41">
+<link rel="stylesheet" href="us.css?v=41">
+<link rel="stylesheet" href="player.css?v=41">
+<link rel="stylesheet" href="soldier.css?v=41" onerror="window.onerror && window.onerror('Не нашёлся файл soldier.css', 'soldier.css', 0)">
 </head>
 <body>
 <canvas id="fx"></canvas>
@@ -178,7 +178,9 @@
 
   <!-- 🎵 ПЛЕЕР -->
   <section class="screen s-music" data-name="music">
+    <div class="bg"><i></i><i></i><i></i></div>
     <canvas class="war" id="warCv"></canvas>
+    <div class="mu-flash"></div>
     <div class="content mu">
       <div class="mu-head" data-a><h2>Плеер</h2><p class="sub">Наша музыка</p></div>
       <div class="mu-now" data-a>
@@ -281,12 +283,12 @@
     document.body.appendChild(d);
   };
 </script>
-<script src="config.js?v=40"></script>
+<script src="config.js?v=41"></script>
 <script>if (!window.CONFIG) window.onerror('config.js не загрузился или в нём ошибка (запятая, кавычка)', 'config.js', 0);</script>
-<script src="app.js?v=40"></script>
-<script src="us.js?v=40" onerror="window.onerror('Не нашёлся файл us.js', 'us.js', 0)"></script>
-<script src="soldier.js?v=40" onerror="window.onerror('Не нашёлся файл soldier.js — проверь, что он лежит в репо рядом с index.html', 'soldier.js', 0)"></script>
-<script src="notify.js?v=40" onerror="window.onerror('Не нашёлся файл notify.js', 'notify.js', 0)"></script>
-<script src="player.js?v=40" onerror="window.onerror('Не нашёлся файл player.js', 'player.js', 0)"></script>
+<script src="app.js?v=41"></script>
+<script src="us.js?v=41" onerror="window.onerror('Не нашёлся файл us.js', 'us.js', 0)"></script>
+<script src="soldier.js?v=41" onerror="window.onerror('Не нашёлся файл soldier.js — проверь, что он лежит в репо рядом с index.html', 'soldier.js', 0)"></script>
+<script src="notify.js?v=41" onerror="window.onerror('Не нашёлся файл notify.js', 'notify.js', 0)"></script>
+<script src="player.js?v=41" onerror="window.onerror('Не нашёлся файл player.js', 'player.js', 0)"></script>
 </body>
 </html>
