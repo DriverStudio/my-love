@@ -15,9 +15,10 @@
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Caveat:wght@600;700&family=Manrope:wght@500;700;800&family=Unbounded:wght@600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=39">
-<link rel="stylesheet" href="us.css?v=39">
-<link rel="stylesheet" href="soldier.css?v=39" onerror="window.onerror && window.onerror('Не нашёлся файл soldier.css', 'soldier.css', 0)">
+<link rel="stylesheet" href="style.css?v=40">
+<link rel="stylesheet" href="us.css?v=40">
+<link rel="stylesheet" href="player.css?v=40">
+<link rel="stylesheet" href="soldier.css?v=40" onerror="window.onerror && window.onerror('Не нашёлся файл soldier.css', 'soldier.css', 0)">
 </head>
 <body>
 <canvas id="fx"></canvas>
@@ -175,6 +176,28 @@
     </div>
   </section>
 
+  <!-- 🎵 ПЛЕЕР -->
+  <section class="screen s-music" data-name="music">
+    <canvas class="war" id="warCv"></canvas>
+    <div class="content mu">
+      <div class="mu-head" data-a><h2>Плеер</h2><p class="sub">Наша музыка</p></div>
+      <div class="mu-now" data-a>
+        <p class="mu-title" id="muTitle">Тишина…</p>
+        <p class="mu-artist" id="muArtist">Добавь песни в пульте</p>
+        <div class="mu-bar" id="muBar"><i id="muFill"></i><b id="muKnob"></b></div>
+        <div class="mu-time"><span id="muCur">0:00</span><span id="muDur">0:00</span></div>
+        <div class="mu-ctl">
+          <button id="muShuf" aria-label="Перемешать">🔀</button>
+          <button id="muPrev" aria-label="Назад">⏮</button>
+          <button id="muPlay" class="mu-play" aria-label="Играть">▶</button>
+          <button id="muNext" aria-label="Дальше">⏭</button>
+          <button id="muRep" aria-label="Повтор">🔁</button>
+        </div>
+      </div>
+      <div class="mu-list" id="muList" data-a></div>
+    </div>
+  </section>
+
   <!-- 7. ИГРЫ -->
   <section class="screen s-games" data-name="games">
     <div class="bg"><i></i><i></i><i></i></div>
@@ -212,6 +235,7 @@
   <button aria-label="Когда вернусь">🌴</button>
   <button aria-label="Настроение">🌈</button>
   <button aria-label="Мы" id="navUs">💞</button>
+  <button aria-label="Плеер" id="navMusic">🎵</button>
   <button aria-label="Игры">🎮</button>
   <button aria-label="Пульт" id="navAdmin" hidden>⚙️</button>
 </nav>
@@ -244,6 +268,8 @@
 <button class="bell" id="bell" hidden aria-label="Уведомления">🔔<span class="badge" hidden></span></button>
 <div class="knock-fx" id="knockFx" hidden><div class="knock-heart">💓</div><p id="knockText"></p></div>
 
+<audio id="aud" preload="metadata"></audio>
+
 <div id="toast" role="status"></div>
 
 <script>
@@ -255,11 +281,12 @@
     document.body.appendChild(d);
   };
 </script>
-<script src="config.js?v=39"></script>
+<script src="config.js?v=40"></script>
 <script>if (!window.CONFIG) window.onerror('config.js не загрузился или в нём ошибка (запятая, кавычка)', 'config.js', 0);</script>
-<script src="app.js?v=39"></script>
-<script src="us.js?v=39" onerror="window.onerror('Не нашёлся файл us.js', 'us.js', 0)"></script>
-<script src="soldier.js?v=39" onerror="window.onerror('Не нашёлся файл soldier.js — проверь, что он лежит в репо рядом с index.html', 'soldier.js', 0)"></script>
-<script src="notify.js?v=39" onerror="window.onerror('Не нашёлся файл notify.js', 'notify.js', 0)"></script>
+<script src="app.js?v=40"></script>
+<script src="us.js?v=40" onerror="window.onerror('Не нашёлся файл us.js', 'us.js', 0)"></script>
+<script src="soldier.js?v=40" onerror="window.onerror('Не нашёлся файл soldier.js — проверь, что он лежит в репо рядом с index.html', 'soldier.js', 0)"></script>
+<script src="notify.js?v=40" onerror="window.onerror('Не нашёлся файл notify.js', 'notify.js', 0)"></script>
+<script src="player.js?v=40" onerror="window.onerror('Не нашёлся файл player.js', 'player.js', 0)"></script>
 </body>
 </html>

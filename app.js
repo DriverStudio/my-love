@@ -200,7 +200,7 @@ $('#layer').addEventListener('touchmove', e => { if (e.target.closest('.pz-board
   function enter(btn, chars, pt) {
     const r = btn.getBoundingClientRect(), x = pt ? pt[0] : r.left + r.width / 2, y = pt ? pt[1] : r.top + r.height / 2;
     fx.burst(x, y, chars, 60, 1.4); buzz(30);
-    if (isAdmin) { $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 9); initAdmin(); }
+    if (isAdmin) { $('#navAdmin').hidden = false; $('#nav').style.setProperty('--n', 10); initAdmin(); }
     $('#intro').classList.add('out'); setTimeout(() => $('#intro').remove(), 1000);
     go(0, x, y);
     document.dispatchEvent(new Event('entered'));
