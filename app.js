@@ -1080,13 +1080,17 @@ function openSheet(row) {
     ? `<label class="field"><span>${l}</span><select name="${k}">${SELECTS[k].map(([v, n]) => `<option value="${v}">${n}</option>`).join('')}</select></label>`
     : type === 'color'
     ? `<div class="field"><span>${l}</span><div class="pal-row"><div class="env env-mini c0" id="envPrev"><div class="env-box"><div class="env-back"></div><div class="env-paper"></div><div class="env-front"></div><div class="env-flap"></div><div class="env-seal">❤</div></div></div><div class="swatches" id="swatches"></div></div><div class="pal-actions"><button type="button" class="chip" id="palGen">🎲 Другие цвета</button><label class="chip">🎨 Свой<input type="color" name="${k}"></label></div></div>`
-    : `<label class="field"><span>${l}</span>${type === 'area' ? `<textarea name="${k}" rows="${k === 'body' ? 9 : 3}"></textarea>` : `<input name="${k}" type="${type}">`}</label>`).join('');
+    : `<label class="field"><span>${l}</span>${type === 'area' ? `<textarea name="${k}" rows="${k === 'body' ? 9 : 3}"></textarea>` : `<input name="${k}" type="${type === 'datetime' ? 'datetime-local' : type}">`}</label>`).join('');
   t.fields.forEach(([k, , type, opt]) => {
     const el = $(`[name="${k}"]`, sheet);
     if (type === 'check') el.checked = row ? !!row[k] : false;
     else if (type === 'color') initPalette(el, row && row[k]);
     else if (type === 'image') initImagePick(row);
-    else if (type === 'select') el.value = row ? row[k] : k === 'cols' ? '4' : SELECTS[k][0][0];
+    else if (type === 'select') el.value = row ? String(row[k]) : k === 'cols' ? '4' : SELECTS[k][0][0];
+    else if (type === 'datetime') { // ГГГГ-ММ-ДДTЧЧ:ММ; новый — ближайший ровный час
+      if (row && row[k]) el.value = String(row[k]).slice(0, 16);
+      else { const d = new Date(Date.now() + 3600e3); el.value = new Date(d.getTime() - d.getTimezoneOffset() * 6e4).toISOString().slice(0, 14) + '00'; }
+    }
     else el.value = row ? (row[k] ?? '') : type === 'date' && !opt ? defaultDate(k) : '';
   });
   if (!row && NOTIFY[admTab]) $('#sheetFields').insertAdjacentHTML('beforeend', '<label class="chk nf-chk"><input type="checkbox" id="sheetNotify" checked><span>🔔 Уведомить её</span></label>');
